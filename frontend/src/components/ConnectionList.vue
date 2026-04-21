@@ -238,10 +238,12 @@ const handleClickOutside = () => {
 
 onMounted(async () => {
   const config = await getConfig()
-  if (config.expandedGroups) {
+  // 防御：确保 config 存在且有 expandedGroups
+  if (config && config.expandedGroups) {
     expandedGroups.value = config.expandedGroups
   } else {
-    if (groups.value.length > 0) {
+    // 如果没有配置，设置默认展开
+    if (groups.value && groups.value.length > 0 && groups.value[0] && groups.value[0].id) {
       expandedGroups.value[groups.value[0].id] = true
     }
     expandedGroups.value['ungrouped'] = true
@@ -302,12 +304,11 @@ onUnmounted(() => {
 .search-row {
   width: 100%;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .search-input {
-  width: 100%;
-  max-width: 100%;
+  width: 188px;
 }
 
 .list-content {

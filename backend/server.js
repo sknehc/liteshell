@@ -21,7 +21,6 @@ app.use(express.urlencoded({ extended: true }));
 const CONFIG_DIR = path.join(__dirname, '..', 'data');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
-// 确保目录存在（递归创建）
 if (!fs.existsSync(CONFIG_DIR)) {
   fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o755 });
 }
@@ -43,7 +42,7 @@ const defaultConfig = {
   "sftp_col_widths": { "name": 300, "size": 100, "time": 160, "perm": 180 },
   "sftp_sort": { "field": "name", "order": "asc" },
   "sftp_overwrite_prefs": {},
-  "sidebarWidth": 280,
+  "sidebarWidth": 215,
   "expandedGroups": { "1776693493484": true }
 };
 
@@ -55,9 +54,24 @@ function loadConfig() {
       return defaultConfig;
     }
     const data = fs.readFileSync(CONFIG_FILE, 'utf8');
-    const config = JSON.parse(data);
+    let config = JSON.parse(data);
+
+    const merged = { ...defaultConfig, ...config };
+
+    // 强制保证 groups 包含“默认分组”
+    if (!merged.groups || merged.groups.length === 0) {
+      merged.groups = [{ id: Date.now().toString(), name: '默认分组' }];
+    } else if (!merged.groups.some(g => g.name === '默认分组')) {
+      merged.groups.push({ id: Date.now().toString(), name: '默认分组' });
+    }
+
+    // 强制保证 expandedGroups 存在
+    if (!merged.expandedGroups || typeof merged.expandedGroups !== 'object') {
+      merged.expandedGroups = { [merged.groups[0].id]: true };
+    }
+
     console.log('✅ 配置加载成功');
-    return { ...defaultConfig, ...config };
+    return merged;
   } catch (err) {
     console.error('❌ 加载配置文件失败:', err);
     return defaultConfig;
@@ -66,7 +80,13 @@ function loadConfig() {
 
 function saveConfig(config) {
   try {
-    // 再次确保目录存在（防止运行时被删除）
+    // 确保保存时 groups 和 expandedGroups 完整
+    if (!config.groups || config.groups.length === 0) {
+      config.groups = [{ id: Date.now().toString(), name: '默认分组' }];
+    }
+    if (!config.expandedGroups) {
+      config.expandedGroups = { [config.groups[0].id]: true };
+    }
     if (!fs.existsSync(CONFIG_DIR)) {
       fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o755 });
     }
@@ -112,7 +132,6 @@ app.post('/api/config/:key', (req, res) => {
 });
 // =================================================
 
-// Multer 配置（支持中文文件名）
 const storage = multer.diskStorage({
   destination: 'uploads/',
   filename: (req, file, cb) => {
@@ -129,7 +148,6 @@ const upload = multer({ storage });
 const sessions = new Map();
 const sshManager = new SSHManager(sessions);
 
-// 递归打包函数
 async function addFolderToArchive(sessionId, remotePath, archive, archivePath) {
   const files = await sshManager.handleSFTPList(sessionId, remotePath);
   for (const item of files) {
@@ -145,7 +163,6 @@ async function addFolderToArchive(sessionId, remotePath, archive, archivePath) {
   }
 }
 
-// WebSocket 处理
 wss.on('connection', (ws, req) => {
   console.log('WebSocket client connected');
   let currentSessionId = null;
@@ -219,7 +236,6 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-// HTTP API: 上传文件
 app.post('/api/sftp/upload', upload.single('file'), async (req, res) => {
   const { sessionId, remotePath } = req.body;
   const file = req.file;
@@ -238,7 +254,6 @@ app.post('/api/sftp/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// HTTP API: 下载文件
 app.get('/api/sftp/download', async (req, res) => {
   const { sessionId, filePath } = req.query;
   if (!sessionId || !filePath) return res.status(400).json({ success: false, error: '缺少必要参数' });
@@ -255,7 +270,6 @@ app.get('/api/sftp/download', async (req, res) => {
   }
 });
 
-// HTTP API: 下载文件夹（打包为zip）
 app.post('/api/sftp/download-folder', async (req, res) => {
   const { sessionId, folderPath } = req.body;
   if (!sessionId || !folderPath) return res.status(400).json({ success: false, error: '缺少必要参数' });
@@ -283,7 +297,6 @@ app.post('/api/sftp/download-folder', async (req, res) => {
   }
 });
 
-// HTTP API: 检查文件是否存在
 app.post('/api/sftp/exists', async (req, res) => {
   const { sessionId, filePath } = req.body;
   if (!sessionId || !filePath) return res.status(400).json({ success: false, error: '缺少必要参数' });
@@ -297,7 +310,6 @@ app.post('/api/sftp/exists', async (req, res) => {
   }
 });
 
-// 读取文件内容
 app.post('/api/sftp/read-file', async (req, res) => {
   const { sessionId, filePath } = req.body;
   if (!sessionId || !filePath) return res.status(400).json({ success: false, error: '缺少必要参数' });
@@ -311,7 +323,6 @@ app.post('/api/sftp/read-file', async (req, res) => {
   }
 });
 
-// 写入文件内容
 app.post('/api/sftp/write-file', async (req, res) => {
   const { sessionId, filePath, content } = req.body;
   if (!sessionId || !filePath || content === undefined) return res.status(400).json({ success: false, error: '缺少必要参数' });
@@ -325,7 +336,6 @@ app.post('/api/sftp/write-file', async (req, res) => {
   }
 });
 
-// 创建空文件
 app.post('/api/sftp/create-file', async (req, res) => {
   const { sessionId, filePath } = req.body;
   if (!sessionId || !filePath) return res.status(400).json({ success: false, error: '缺少必要参数' });
@@ -339,7 +349,6 @@ app.post('/api/sftp/create-file', async (req, res) => {
   }
 });
 
-// 测试 SSH 连接
 app.post('/api/ssh/test', async (req, res) => {
   const { host, port, username, password, privateKey } = req.body;
   const result = await sshManager.testConnection({ host, port, username, password, privateKey });

@@ -1,7 +1,10 @@
 #!/bin/sh
-echo "启动 liteshell 服务..."
+echo "启动后端服务..."
 cd /app/backend
 node server.js &
+
+echo "启动前端静态服务器..."
 cd /app/frontend
-npx vite preview --host 0.0.0.0 --port 5173 &
+serve -s dist -l 5173 --no-request-logging --no-update-notifier &
+
 wait

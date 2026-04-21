@@ -27,8 +27,19 @@ export const useConnectionStore = defineStore('connection', () => {
 
   async function loadConfig() {
     const config = await getConfig()
-    connections.value = config.connections || []
-    groups.value = config.groups || []
+    connections.value = config?.connections || []
+    groups.value = config?.groups || []
+
+    // 保底：确保 groups 中永远有“默认分组”
+    if (groups.value.length === 0) {
+      groups.value.push({ id: Date.now().toString(), name: '默认分组', connections: [] })
+    } else if (!groups.value.some(g => g && g.name === '默认分组')) {
+      groups.value.push({ id: Date.now().toString(), name: '默认分组', connections: [] })
+    }
+
+    // 过滤掉无效的组（undefined 或 null）
+    groups.value = groups.value.filter(g => g != null)
+
     rebuildGroupConnections()
   }
 

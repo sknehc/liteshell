@@ -137,14 +137,39 @@ const clearCache = async () => {
   await ElMessageBox.confirm('清除所有本地缓存将删除所有连接配置、设置和命令历史，确定吗？', '警告', { type: 'warning' })
   // 清空所有配置（重置为默认）
   const defaultConfig = {
-    connections: [],
-    groups: [],
-    appSettings: { ...settings },
-    sftp_col_widths: { name: 300, size: 100, time: 160, perm: 180 },
-    sftp_sort: { field: 'name', order: 'asc' },
-    sftp_overwrite_prefs: {},
-    sidebarWidth: 280,
-    expandedGroups: {}
+    "connections": [],
+    "groups": [
+      {
+        "id": "1776693493484",
+        "name": "默认分组"
+      }
+    ],
+    "appSettings": {
+      "theme": "auto",
+      "language": "zh-CN",
+      "fontSize": 14,
+      "fontFamily": "Consolas",
+      "backgroundColor": "#1e1e1e",
+      "foregroundColor": "#d4d4d4",
+      "defaultLocalPath": "",
+      "concurrentUploads": 3,
+      "confirmDelete": true
+    },
+    "sftp_col_widths": {
+      "name": 300,
+      "size": 100,
+      "time": 160,
+      "perm": 180
+    },
+    "sftp_sort": {
+      "field": "name",
+      "order": "asc"
+    },
+    "sftp_overwrite_prefs": {},
+    "sidebarWidth": 215,
+    "expandedGroups": {
+      "1776693493484": true
+    }
   }
   await saveConfig(defaultConfig)
   ElMessage.success('缓存已清除，页面将刷新')
@@ -186,14 +211,39 @@ const clearAllData = async () => {
   try {
     await ElMessageBox.confirm('清除所有本地数据将删除所有连接、分组、设置等，此操作不可恢复。确定吗？', '警告', { type: 'warning' })
     const defaultConfig = {
-      connections: [],
-      groups: [],
-      appSettings: { ...settings },
-      sftp_col_widths: { name: 300, size: 100, time: 160, perm: 180 },
-      sftp_sort: { field: 'name', order: 'asc' },
-      sftp_overwrite_prefs: {},
-      sidebarWidth: 280,
-      expandedGroups: {}
+      "connections": [],
+      "groups": [
+        {
+          "id": "1776693493484",
+          "name": "默认分组"
+        }
+      ],
+      "appSettings": {
+        "theme": "auto",
+        "language": "zh-CN",
+        "fontSize": 14,
+        "fontFamily": "Consolas",
+        "backgroundColor": "#1e1e1e",
+        "foregroundColor": "#d4d4d4",
+        "defaultLocalPath": "",
+        "concurrentUploads": 3,
+        "confirmDelete": true
+      },
+      "sftp_col_widths": {
+        "name": 300,
+        "size": 100,
+        "time": 160,
+        "perm": 180
+      },
+      "sftp_sort": {
+        "field": "name",
+        "order": "asc"
+      },
+      "sftp_overwrite_prefs": {},
+      "sidebarWidth": 215,
+      "expandedGroups": {
+        "1776693493484": true
+      }
     }
     await saveConfig(defaultConfig)
     ElMessage.success('已清除所有数据，页面即将刷新')

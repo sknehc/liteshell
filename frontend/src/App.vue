@@ -232,8 +232,18 @@ let startX = 0
 let startWidth = 0
 
 const loadSidebarWidth = async () => {
-  const config = await getConfig()
-  sidebarWidth.value = config.sidebarWidth || 280
+  try {
+    const config = await getConfig()
+    // 防御：确保 config 存在且包含 sidebarWidth
+    if (config && typeof config.sidebarWidth === 'number') {
+      sidebarWidth.value = config.sidebarWidth
+    } else {
+      sidebarWidth.value = 280  // 默认值
+    }
+  } catch (err) {
+    console.error('加载侧边栏宽度失败:', err)
+    sidebarWidth.value = 280
+  }
 }
 const saveSidebarWidth = async () => {
   await saveConfigKey('sidebarWidth', sidebarWidth.value)
@@ -284,9 +294,14 @@ const applyTheme = (theme: string) => {
   }
 }
 const loadTheme = async () => {
-  const config = await getConfig()
-  const theme = config.appSettings?.theme || 'auto'
-  applyTheme(theme)
+  try {
+    const config = await getConfig()
+    const theme = config?.appSettings?.theme || 'auto'
+    applyTheme(theme)
+  } catch (err) {
+    console.error('加载主题失败:', err)
+    applyTheme('auto')
+  }
 }
 const toggleTheme = async () => {
   const config = await getConfig()
