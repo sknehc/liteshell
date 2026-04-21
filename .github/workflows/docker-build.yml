@@ -1,0 +1,82 @@
+name: Build Multi-Arch Docker Image and Upload to Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  PROJECT_NAME: ${{ github.event.repository.name }}
+  IMAGE_USER: ${{ github.repository_owner }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64, armv7]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Convert image user to lowercase
+        id: username
+        run: echo "USER=${IMAGE_USER,,}" >> $GITHUB_OUTPUT
+
+      - name: Get tag name
+        id: tag
+        run: echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Build and export Docker image (${{ matrix.arch }})
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: ${{ matrix.arch == 'armv7' && 'linux/arm/v7' || format('linux/{0}', matrix.arch) }}
+          outputs: type=docker,dest=/tmp/${{ env.PROJECT_NAME }}_${{ steps.tag.outputs.TAG }}_${{ matrix.arch }}.tar
+          tags: ${{ steps.username.outputs.USER }}/${{ env.PROJECT_NAME }}:${{ steps.tag.outputs.TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ matrix.arch }}
+          path: /tmp/${{ env.PROJECT_NAME }}_${{ steps.tag.outputs.TAG }}_${{ matrix.arch }}.tar
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/artifacts
+
+      - name: Get tag name
+        id: tag
+        run: echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Create Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.TAG }}
+          name: ${{ steps.tag.outputs.TAG }}
+          draft: false
+          prerelease: false
+          files: |
+            /tmp/artifacts/docker-image-amd64/*.tar
+            /tmp/artifacts/docker-image-arm64/*.tar
+            /tmp/artifacts/docker-image-armv7/*.tar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
