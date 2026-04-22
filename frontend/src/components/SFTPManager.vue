@@ -31,6 +31,7 @@
                 <span class="breadcrumb-link" @click="navigateToPath(idx)">{{ part }}</span>
               </el-breadcrumb-item>
             </el-breadcrumb>
+            <el-button size="small" :icon="DArrowRight" @click="goToPath" title="跳转到路径" />
             <el-button size="small" :icon="CopyDocument" @click="copyPath" title="复制完整路径" />
           </div>
         </div>
@@ -181,7 +182,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { Upload, Download, FolderAdd, Delete, Refresh, Folder, Document, CopyDocument } from '@element-plus/icons-vue'
+import { Upload, Download, FolderAdd, Delete, Refresh, Folder, Document, CopyDocument, DArrowRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getConfig, saveConfigKey } from '../api/config'
 
@@ -549,6 +550,26 @@ const navigateToPath = (index: number) => {
 const copyPath = () => {
   navigator.clipboard.writeText(currentPath.value === '/' ? '/' : currentPath.value)
   ElMessage.success('路径已复制')
+}
+
+
+const goToPath = async () => {
+  const { value: inputPath } = await ElMessageBox.prompt('请输入服务器路径（绝对路径）', '跳转到路径', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    inputValue: currentPath.value,
+    inputPattern: /^\//,
+    inputErrorMessage: '路径必须以 / 开头'
+  })
+  if (inputPath) {
+    // 规范化路径：去除末尾多余的斜杠，但保留根目录
+    let newPath = inputPath.trim()
+    if (newPath !== '/' && newPath.endsWith('/')) {
+      newPath = newPath.slice(0, -1)
+    }
+    currentPath.value = newPath
+    loadFileList()
+  }
 }
 
 const formatPermissions = (file: any): string => {

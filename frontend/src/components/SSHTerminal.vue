@@ -43,7 +43,7 @@ import 'xterm/css/xterm.css'
 import { Close, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import SFTPManager from './SFTPManager.vue'
-import { useSettingsStore } from '../stores/settingsStore'
+import { getConfig } from '../api/config'
 
 const props = defineProps<{
   connection: any
@@ -61,82 +61,104 @@ const activeTab = ref('terminal')
 const isConnecting = ref(false)
 let copyTimeout: number | null = null
 
-const settingsStore = useSettingsStore()
-
-// 安全获取设置（兜底默认值）
-const getSafeSettings = () => {
-  const settings = settingsStore.appSettings.value
-  if (settings && typeof settings.fontSize === 'number') {
-    return settings
-  }
-  return {
-    fontSize: 14,
-    fontFamily: 'Consolas, "Courier New", monospace',
-    backgroundColor: '#1e1e1e',
-    foregroundColor: '#d4d4d4'
+// 直接从后端获取最新设置（绕过 store 的 undefined 问题）
+const fetchSettings = async () => {
+  try {
+    const config = await getConfig()
+    const settings = config?.appSettings || {}
+    return {
+      fontSize: settings.fontSize ?? 14,
+      fontFamily: settings.fontFamily ?? 'Consolas, "Courier New", monospace',
+      backgroundColor: settings.backgroundColor ?? '#1e1e1e',
+      foregroundColor: settings.foregroundColor ?? '#d4d4d4'
+    }
+  } catch (err) {
+    console.error('获取终端设置失败', err)
+    return {
+      fontSize: 14,
+      fontFamily: 'Consolas, "Courier New", monospace',
+      backgroundColor: '#1e1e1e',
+      foregroundColor: '#d4d4d4'
+    }
   }
 }
 
-// 应用终端设置（字体、颜色等）- 使用 setOption + 强制刷新内部渲染器
-const applyTerminalSettings = () => {
+// 应用终端设置（异步获取最新配置）
+const applyTerminalSettings = async () => {
   if (!terminal) {
     console.warn('terminal 未初始化，跳过应用设置')
     return
   }
-  const settings = getSafeSettings()
+
+  const settings = await fetchSettings()
   const { fontSize, fontFamily, backgroundColor, foregroundColor } = settings
+
+  console.log('应用终端设置:', { fontSize, fontFamily, backgroundColor, foregroundColor })
+
   try {
-    // 方法1：使用官方 setOption（xterm@5.3.0 支持）
-    if (typeof terminal.setOption === 'function') {
-      terminal.setOption('fontSize', fontSize)
-      terminal.setOption('fontFamily', fontFamily)
-      terminal.setOption('theme', {
-        background: backgroundColor,
-        foreground: foregroundColor,
-        cursor: '#aeafad'
-      })
-    } else {
-      // 降级：直接修改 options
-      terminal.options.fontSize = fontSize
-      terminal.options.fontFamily = fontFamily
-      terminal.options.theme = {
-        background: backgroundColor,
-        foreground: foregroundColor,
-        cursor: '#aeafad'
-      }
+    // 1. 更新字体选项
+    terminal.options.fontSize = fontSize
+    terminal.options.fontFamily = fontFamily
+
+    // 2. 更新主题
+    terminal.options.theme = {
+      background: backgroundColor,
+      foreground: foregroundColor,
+      cursor: '#aeafad'
     }
 
-    // 强制内部渲染器更新主题和尺寸
-    const core = (terminal as any)._core
+    // 3. 强制内部渲染器刷新（访问内部 API）
+    // @ts-ignore
+    const core = terminal._core
     if (core && core._renderService && core._renderService._renderer) {
       const renderer = core._renderService._renderer
       if (typeof renderer.onThemeChange === 'function') {
         renderer.onThemeChange()
       }
-      if (typeof renderer.onDevicePixelRatioChange === 'function') {
-        renderer.onDevicePixelRatioChange()
+      if (typeof renderer.renderRows === 'function') {
+        renderer.renderRows(0, terminal.rows - 1)
       }
     }
 
-    // 强制重绘所有行
-    if (typeof terminal.refresh === 'function') {
-      terminal.refresh(0, terminal.rows - 1)
-    }
-
-    // 重新适应容器大小（会触发 resize 和重绘）
+    // 4. 重新适应容器大小
     if (fitAddon) {
       fitAddon.fit()
     }
 
-    console.log('终端设置已应用:', { fontSize, fontFamily, backgroundColor, foregroundColor })
+    // 5. 公开 API 强制刷新
+    if (typeof terminal.refresh === 'function') {
+      terminal.refresh(0, terminal.rows - 1)
+    }
+
+    // 6. 直接修改 DOM 元素背景（兜底）
+    const xtermElement = document.querySelector('.xterm')
+    if (xtermElement) {
+      (xtermElement as HTMLElement).style.backgroundColor = backgroundColor
+    }
+    const xtermViewport = document.querySelector('.xterm-viewport')
+    if (xtermViewport) {
+      (xtermViewport as HTMLElement).style.backgroundColor = backgroundColor
+    }
+    const xtermScreen = document.querySelector('.xterm-screen')
+    if (xtermScreen) {
+      (xtermScreen as HTMLElement).style.backgroundColor = backgroundColor
+    }
+
+    // 7. 写入并删除一个空格强制重绘
+    terminal.write(' ')
+    setTimeout(() => {
+      terminal.write('\b \b')
+    }, 10)
+
+    console.log('终端设置已应用')
   } catch (err) {
     console.warn('应用终端设置失败', err)
   }
 }
 
-// 初始化终端
-const initTerminal = () => {
-  const settings = getSafeSettings()
+// 初始化终端（异步获取配置）
+const initTerminal = async () => {
+  const settings = await fetchSettings()
   terminal = new Terminal({
     cursorBlink: true,
     fontSize: settings.fontSize,
@@ -280,28 +302,16 @@ const reconnect = async () => {
   connectSSH()
 }
 
-// 监听设置变化（深度监听）
-watch(
-    () => settingsStore.appSettings.value,
-    (newSettings, oldSettings) => {
-      if (terminal) {
-        applyTerminalSettings()
-      }
-    },
-    { deep: true, immediate: false }
-)
-
-// 手动触发设置更新的事件监听
-const onSettingsUpdated = () => {
+// 监听设置变化（通过全局事件）
+const onSettingsUpdated = async () => {
+  console.log('收到 settings-updated 事件，重新获取设置')
   if (terminal) {
-    applyTerminalSettings()
+    await applyTerminalSettings()
   }
 }
 
 onMounted(async () => {
-  await settingsStore.loadSettings()
-  console.log('设置加载完成:', settingsStore.appSettings.value)
-  initTerminal()
+  await initTerminal()
   connectSSH()
   window.addEventListener('resize', handleResize)
   window.addEventListener('settings-updated', onSettingsUpdated)
@@ -334,6 +344,7 @@ watch(activeTab, (newVal) => {
 </script>
 
 <style scoped>
+/* 样式保持不变 */
 .ssh-terminal-container {
   height: 100%;
   display: flex;

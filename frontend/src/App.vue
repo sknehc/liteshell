@@ -389,6 +389,9 @@ onMounted(async () => {
   border-bottom: 1px solid var(--el-border-color);
   padding: 0 12px;
   background: var(--el-bg-color-page);
+  height: 42px;
+  min-height: 42px;
+  flex-shrink: 0;
 }
 .tabs {
   display: flex;

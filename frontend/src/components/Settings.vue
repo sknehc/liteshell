@@ -1,63 +1,23 @@
 <template>
   <div class="settings-container">
     <el-tabs v-model="activeTab">
-      <el-tab-pane label="界面设置" name="appearance">
-        <el-form label-width="100px">
-          <el-form-item label="主题">
-            <el-select v-model="localSettings.theme">
-              <el-option label="浅色" value="light" />
-              <el-option label="深色" value="dark" />
-              <el-option label="跟随系统" value="auto" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="语言">
-            <el-select v-model="localSettings.language">
-              <el-option label="中文" value="zh-CN" />
-              <el-option label="English" value="en-US" />
-            </el-select>
-          </el-form-item>
-        </el-form>
-      </el-tab-pane>
-
       <el-tab-pane label="终端设置" name="terminal">
         <el-form label-width="100px">
           <el-form-item label="字体大小">
-            <el-input-number v-model="localSettings.fontSize" :min="10" :max="24" />
+            <el-input-number v-model="localSettings.fontSize" :min="10" :max="24" style="width: 140px;" />
           </el-form-item>
           <el-form-item label="字体家族">
-            <el-select v-model="localSettings.fontFamily">
+            <el-select v-model="localSettings.fontFamily" style="width: 140px;">
               <el-option label="Consolas" value="Consolas" />
               <el-option label="Monaco" value="Monaco" />
               <el-option label="Courier New" value="Courier New" />
             </el-select>
           </el-form-item>
-          <el-form-item label="背景色">
+          <el-form-item label="背景颜色">
             <el-color-picker v-model="localSettings.backgroundColor" />
           </el-form-item>
-          <el-form-item label="前景色">
+          <el-form-item label="字体颜色">
             <el-color-picker v-model="localSettings.foregroundColor" />
-          </el-form-item>
-        </el-form>
-      </el-tab-pane>
-
-      <el-tab-pane label="文件管理" name="file">
-        <el-form label-width="100px">
-          <el-form-item label="默认本地路径">
-            <el-input v-model="localSettings.defaultLocalPath" placeholder="/home/user" />
-          </el-form-item>
-          <el-form-item label="并发数">
-            <el-input-number v-model="localSettings.concurrentUploads" :min="1" :max="10" />
-          </el-form-item>
-        </el-form>
-      </el-tab-pane>
-
-      <el-tab-pane label="通用设置" name="general">
-        <el-form label-width="100px">
-          <el-form-item label="确认提示">
-            <el-switch v-model="localSettings.confirmDelete" />
-          </el-form-item>
-          <el-form-item label="清除缓存">
-            <el-button type="danger" @click="clearCache">清除所有本地数据</el-button>
           </el-form-item>
         </el-form>
       </el-tab-pane>
@@ -83,7 +43,7 @@
           </el-form-item>
           <el-form-item label="清除所有数据">
             <el-button type="danger" @click="clearAllData">清除所有本地数据</el-button>
-            <div class="form-tip">清除所有连接、分组、设置等（与上方“清除缓存”类似，但更彻底）</div>
+            <div class="form-tip">清除所有连接、分组、设置等</div>
           </el-form-item>
         </el-form>
       </el-tab-pane>
@@ -102,7 +62,7 @@ import type { UploadProps } from 'element-plus'
 import { getConfig, saveConfig, saveConfigKey } from '../api/config'
 import { useSettingsStore } from '../stores/settingsStore'
 
-const activeTab = ref('appearance')
+const activeTab = ref('terminal')
 const settingsStore = useSettingsStore()
 
 // 本地表单数据
@@ -122,46 +82,23 @@ const localSettings = reactive({
 const loadLocalSettings = async () => {
   await settingsStore.loadSettings()
   Object.assign(localSettings, settingsStore.appSettings.value)
-  // 不再在此处直接调用 applyTheme，交给 App.vue 统一处理
 }
 
-// 保存所有设置
+// 保存所有设置（只保存终端相关字段）
 const saveAllSettings = async () => {
-  await settingsStore.saveSettings(localSettings)
-  // 触发全局事件，通知 App.vue 重新加载主题，通知终端重新应用设置
+  const settingsToSave = {
+    fontSize: localSettings.fontSize,
+    fontFamily: localSettings.fontFamily,
+    backgroundColor: localSettings.backgroundColor,
+    foregroundColor: localSettings.foregroundColor
+  }
+  await settingsStore.saveSettings(settingsToSave)
   window.dispatchEvent(new CustomEvent('settings-updated'))
   ElMessage.success('设置已保存')
 }
 
 const manualSave = async () => {
   await saveAllSettings()
-}
-
-const clearCache = async () => {
-  await ElMessageBox.confirm('清除所有本地缓存将删除所有连接配置、设置和命令历史，确定吗？', '警告', { type: 'warning' })
-  const defaultConfig = {
-    "connections": [],
-    "groups": [{ "id": "1776693493484", "name": "默认分组" }],
-    "appSettings": {
-      "theme": "auto",
-      "language": "zh-CN",
-      "fontSize": 14,
-      "fontFamily": "Consolas",
-      "backgroundColor": "#1e1e1e",
-      "foregroundColor": "#d4d4d4",
-      "defaultLocalPath": "",
-      "concurrentUploads": 3,
-      "confirmDelete": true
-    },
-    "sftp_col_widths": { "name": 300, "size": 100, "time": 160, "perm": 180 },
-    "sftp_sort": { "field": "name", "order": "asc" },
-    "sftp_overwrite_prefs": {},
-    "sidebarWidth": 215,
-    "expandedGroups": { "1776693493484": true }
-  }
-  await saveConfig(defaultConfig)
-  ElMessage.success('缓存已清除，页面将刷新')
-  setTimeout(() => location.reload(), 1000)
 }
 
 const exportConfig = async () => {
