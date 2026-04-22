@@ -1,24 +1,24 @@
 <template>
   <div class="app-container">
     <div class="sidebar" :style="{ width: sidebarWidth + 'px' }">
-      <ConnectionList 
-        @select-connection="handleSelectConnection"
-        @new-connection="openNewConnectionDialog"
-        @edit-connection="handleEditConnection"
+      <ConnectionList
+          @select-connection="handleSelectConnection"
+          @new-connection="openNewConnectionDialog"
+          @edit-connection="handleEditConnection"
       />
     </div>
-    
+
     <div class="resizer" @mousedown.prevent="startResize"></div>
-    
+
     <div class="main-content">
       <div class="tabs-header">
         <div class="tabs">
-          <div 
-            v-for="tab in tabs" 
-            :key="tab.id"
-            class="tab"
-            :class="{ active: activeTab === tab.id }"
-            @click="activeTab = tab.id"
+          <div
+              v-for="tab in tabs"
+              :key="tab.id"
+              class="tab"
+              :class="{ active: activeTab === tab.id }"
+              @click="activeTab = tab.id"
           >
             <el-icon><Monitor /></el-icon>
             <span>{{ tab.name }}</span>
@@ -28,22 +28,21 @@
         <div class="header-actions">
           <el-button :icon="isDark ? Sunny : Moon" circle size="small" @click="toggleTheme" />
           <el-button :icon="Setting" circle size="small" @click="showSettings = true" />
-          <el-button :icon="Refresh" circle size="small" @click="refreshCurrentTab" />
         </div>
       </div>
-      
+
       <div class="content-area">
         <template v-for="tab in tabs" :key="tab.id">
           <div v-show="activeTab === tab.id" class="tab-content">
-            <SSHTerminal 
-              v-if="tab.type === 'ssh' && tab.connection"
-              :connection="tab.connection"
-              :session-id="tab.sessionId"
-              @close="closeTab(tab.id)"
+            <SSHTerminal
+                v-if="tab.type === 'ssh' && tab.connection"
+                :connection="tab.connection"
+                :session-id="tab.sessionId"
+                @close="closeTab(tab.id)"
             />
-            <RDPViewer 
-              v-else-if="tab.type === 'rdp' && tab.connection"
-              :connection="tab.connection"
+            <RDPViewer
+                v-else-if="tab.type === 'rdp' && tab.connection"
+                :connection="tab.connection"
             />
             <div v-else class="empty-placeholder">
               <el-empty description="选择一个连接开始" />
@@ -52,7 +51,7 @@
         </template>
       </div>
     </div>
-    
+
     <!-- 新建/编辑连接对话框 -->
     <el-dialog v-model="connectionDialogVisible" :title="isEditMode ? '编辑连接' : '新建连接'" width="500px">
       <el-form :model="formData" label-width="100px">
@@ -68,11 +67,11 @@
         <!-- 分组字段：非必填，支持选择或输入 -->
         <el-form-item label="分组">
           <el-autocomplete
-            v-model="formData.group"
-            :fetch-suggestions="queryGroupSearch"
-            placeholder="请选择或输入新分组名（不选则归入默认分组）"
-            clearable
-            @select="handleGroupSelect"
+              v-model="formData.group"
+              :fetch-suggestions="queryGroupSearch"
+              placeholder="请选择或输入新分组名（不选则归入默认分组）"
+              clearable
+              @select="handleGroupSelect"
           />
         </el-form-item>
         <el-form-item label="主机地址" required>
@@ -102,7 +101,7 @@
         <el-button type="primary" @click="saveConnectionHandler">{{ isEditMode ? '更新' : '保存' }}</el-button>
       </template>
     </el-dialog>
-    
+
     <el-drawer v-model="showSettings" title="系统设置" direction="rtl" size="400px">
       <Settings />
     </el-drawer>
@@ -111,7 +110,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { Monitor, Setting, Refresh, Close, Sunny, Moon } from '@element-plus/icons-vue'
+import { Monitor, Setting, Close, Sunny, Moon } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import ConnectionList from './components/ConnectionList.vue'
 import SSHTerminal from './components/SSHTerminal.vue'
@@ -234,11 +233,10 @@ let startWidth = 0
 const loadSidebarWidth = async () => {
   try {
     const config = await getConfig()
-    // 防御：确保 config 存在且包含 sidebarWidth
     if (config && typeof config.sidebarWidth === 'number') {
       sidebarWidth.value = config.sidebarWidth
     } else {
-      sidebarWidth.value = 280  // 默认值
+      sidebarWidth.value = 280
     }
   } catch (err) {
     console.error('加载侧边栏宽度失败:', err)
@@ -337,7 +335,6 @@ const closeTab = (tabId: string) => {
     else if (tabs.value.length === 0) activeTab.value = ''
   }
 }
-const refreshCurrentTab = () => ElMessage.info('刷新功能开发中')
 
 onMounted(async () => {
   await connectionStore.loadConfig()

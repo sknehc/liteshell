@@ -21,7 +21,7 @@
       </el-button>
       <el-input v-model="searchText" placeholder="搜索当前目录文件" size="small" style="width: 200px;" clearable />
     </div>
-    
+
     <div class="sftp-content">
       <div class="remote-panel">
         <div class="panel-header">
@@ -57,22 +57,22 @@
             </div>
           </div>
           <div class="file-list">
-            <div 
-              v-for="file in sortedFiles" 
-              :key="file.name"
-              class="file-item"
-              :class="{ selected: selectedFile === file, 'is-folder': file.type === 'directory' }"
-              :style="{ gridTemplateColumns: gridTemplateCols }"
-              @click="handleRowClick($event, file)"
-              @contextmenu.prevent="showContextMenu($event, file)"
+            <div
+                v-for="file in sortedFiles"
+                :key="file.name"
+                class="file-item"
+                :class="{ selected: selectedFile === file, 'is-folder': file.type === 'directory' }"
+                :style="{ gridTemplateColumns: gridTemplateCols }"
+                @click="handleRowClick($event, file)"
+                @contextmenu.prevent="showContextMenu($event, file)"
             >
-              <div 
-                class="col-name"
-                :class="{ 'drag-over-folder': dragOverFolder === file && file.type === 'directory' }"
-                @dragenter="onDragEnterFolder(file, $event)"
-                @dragleave="onDragLeaveFolder"
-                @dragend="onDragEnd"
-                @dblclick="openEditor(file)"
+              <div
+                  class="col-name"
+                  :class="{ 'drag-over-folder': dragOverFolder === file && file.type === 'directory' }"
+                  @dragenter="onDragEnterFolder(file, $event)"
+                  @dragleave="onDragLeaveFolder"
+                  @dragend="onDragEnd"
+                  @dblclick="openEditor(file)"
               >
                 <el-icon @click.stop="handleNameClick(file)" class="clickable-icon">
                   <Folder v-if="file.type === 'directory'" /><Document v-else />
@@ -96,7 +96,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="transfer-panel" v-if="transfers.length > 0">
       <div class="transfer-header">
         <span>传输队列</span>
@@ -763,7 +763,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 样式与之前相同，仅增加 .code-editor 样式 */
+/* 核心样式 - 已适配暗色主题变量 */
 .code-editor {
   width: 100%;
   padding: 10px;
@@ -836,6 +836,7 @@ onUnmounted(() => {
   position: sticky;
   top: 0;
   z-index: 1;
+  color: var(--el-text-color-primary);
 }
 .file-list-header > div {
   padding: 8px 12px;
@@ -859,6 +860,7 @@ onUnmounted(() => {
   cursor: pointer;
   border-bottom: 1px solid var(--el-border-color-lighter);
   font-size: 13px;
+  color: var(--el-text-color-primary);
 }
 .file-item > div {
   padding: 8px 12px;

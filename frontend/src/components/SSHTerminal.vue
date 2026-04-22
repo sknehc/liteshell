@@ -59,7 +59,6 @@ const connected = ref(false)
 const activeTab = ref('terminal')
 const isConnecting = ref(false)
 
-// 防抖定时器
 let copyTimeout: number | null = null
 
 const initTerminal = () => {
@@ -80,11 +79,8 @@ const initTerminal = () => {
 
   terminal.open(terminalRef.value!)
   fitAddon.fit()
-
-  // 自动聚焦终端，无需鼠标点击
   terminal.focus()
 
-  // 监听终端选择事件，自动复制选中的文本
   terminal.onSelectionChange(() => {
     if (!terminal) return
     const selectedText = terminal.getSelection()
@@ -125,7 +121,6 @@ const initTerminal = () => {
 }
 
 const connectSSH = () => {
-  // 清理旧连接
   if (ws.value) {
     if (ws.value.readyState === WebSocket.OPEN) {
       ws.value.send(JSON.stringify({
@@ -156,21 +151,15 @@ const connectSSH = () => {
 
   ws.value.onmessage = (event) => {
     const message = JSON.parse(event.data)
-
     switch (message.type) {
       case 'ssh-connected':
         connected.value = true
         isConnecting.value = false
         ElMessage.success('SSH连接成功')
-        // 连接成功后聚焦终端
-        if (terminal && activeTab.value === 'terminal') {
-          terminal.focus()
-        }
+        if (terminal && activeTab.value === 'terminal') terminal.focus()
         break
       case 'ssh-data':
-        if (terminal) {
-          terminal.write(message.data)
-        }
+        if (terminal) terminal.write(message.data)
         break
       case 'ssh-error':
         ElMessage.error('SSH错误: ' + message.error)
@@ -193,9 +182,7 @@ const connectSSH = () => {
   }
 
   ws.value.onclose = () => {
-    if (connected.value) {
-      ElMessage.warning('连接已关闭')
-    }
+    if (connected.value) ElMessage.warning('连接已关闭')
     connected.value = false
     isConnecting.value = false
   }
@@ -204,24 +191,15 @@ const connectSSH = () => {
 const handleResize = () => {
   if (fitAddon && activeTab.value === 'terminal' && terminalRef.value) {
     fitAddon.fit()
-    // 调整后重新聚焦
     terminal?.focus()
   }
 }
 
-// 重新连接方法
 const reconnect = async () => {
   if (isConnecting.value || connected.value) return
-
   isConnecting.value = true
   ElMessage.info('正在重新连接...')
-
-  // 清理终端内容
-  if (terminal) {
-    terminal.clear()
-  }
-
-  // 关闭现有连接并重新建立
+  if (terminal) terminal.clear()
   connectSSH()
 }
 
@@ -239,14 +217,11 @@ onUnmounted(() => {
     }))
     ws.value.close()
   }
-  if (terminal) {
-    terminal.dispose()
-  }
+  if (terminal) terminal.dispose()
   window.removeEventListener('resize', handleResize)
   if (copyTimeout) clearTimeout(copyTimeout)
 })
 
-// 切换标签页时，如果切换到终端，自动调整大小并聚焦
 watch(activeTab, (newVal) => {
   if (newVal === 'terminal') {
     setTimeout(() => {
@@ -282,6 +257,7 @@ watch(activeTab, (newVal) => {
   align-items: center;
   gap: 12px;
   font-size: 13px;
+  color: var(--el-text-color-primary);  /* 新增：确保连接信息文字颜色跟随主题 */
 }
 
 .toolbar-actions {

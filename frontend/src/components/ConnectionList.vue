@@ -16,36 +16,36 @@
       </div>
       <!-- 第二行：搜索框，居中且宽度占满 -->
       <div class="search-row">
-        <el-input 
-          v-model="searchText" 
-          placeholder="搜索连接" 
-          size="small"
-          clearable
-          :prefix-icon="Search"
-          class="search-input"
+        <el-input
+            v-model="searchText"
+            placeholder="搜索连接"
+            size="small"
+            clearable
+            :prefix-icon="Search"
+            class="search-input"
         />
       </div>
     </div>
-    
+
     <div class="list-content">
       <div v-for="group in filteredGroups" :key="group.id" class="group">
-        <div 
-          class="group-header" 
-          @click="toggleGroup(group.id)"
-          @contextmenu.prevent="showGroupContextMenu($event, group)"
+        <div
+            class="group-header"
+            @click="toggleGroup(group.id)"
+            @contextmenu.prevent="showGroupContextMenu($event, group)"
         >
           <el-icon><ArrowRight v-if="!expandedGroups[group.id]" /><ArrowDown v-else /></el-icon>
           <span class="group-name">{{ group.name }}</span>
           <span class="group-count">({{ group.connections.length }})</span>
         </div>
         <div v-show="expandedGroups[group.id]" class="group-connections">
-          <div 
-            v-for="conn in group.connections" 
-            :key="conn.id"
-            class="connection-item"
-            :class="{ active: selectedConnection?.id === conn.id }"
-            @click="selectConnection(conn)"
-            @contextmenu.prevent="showContextMenu($event, conn)"
+          <div
+              v-for="conn in group.connections"
+              :key="conn.id"
+              class="connection-item"
+              :class="{ active: selectedConnection?.id === conn.id }"
+              @click="selectConnection(conn)"
+              @contextmenu.prevent="showContextMenu($event, conn)"
           >
             <el-icon class="conn-icon">
               <Monitor v-if="conn.type === 'ssh'" />
@@ -62,7 +62,7 @@
           </div>
         </div>
       </div>
-      
+
       <!-- 未分组区域（兼容旧数据，实际上所有连接都应归入分组） -->
       <div v-if="ungroupedConnections.length > 0" class="group">
         <div class="group-header" @click="toggleGroup('ungrouped')">
@@ -71,11 +71,11 @@
           <span class="group-count">({{ ungroupedConnections.length }})</span>
         </div>
         <div v-show="expandedGroups['ungrouped']" class="group-connections">
-          <div 
-            v-for="conn in ungroupedConnections" 
-            :key="conn.id"
-            class="connection-item"
-            @click="selectConnection(conn)"
+          <div
+              v-for="conn in ungroupedConnections"
+              :key="conn.id"
+              class="connection-item"
+              @click="selectConnection(conn)"
           >
             <el-icon><Monitor /></el-icon>
             <div class="conn-info">
@@ -86,7 +86,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- 连接右键菜单 -->
     <div v-if="contextMenuVisible" class="context-menu" :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }">
       <div @click="handleEdit">编辑</div>
@@ -238,11 +238,9 @@ const handleClickOutside = () => {
 
 onMounted(async () => {
   const config = await getConfig()
-  // 防御：确保 config 存在且有 expandedGroups
   if (config && config.expandedGroups) {
     expandedGroups.value = config.expandedGroups
   } else {
-    // 如果没有配置，设置默认展开
     if (groups.value && groups.value.length > 0 && groups.value[0] && groups.value[0].id) {
       expandedGroups.value[groups.value[0].id] = true
     }
@@ -261,6 +259,8 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-primary);
 }
 
 .list-header {
@@ -330,6 +330,7 @@ onUnmounted(() => {
   border-radius: 4px;
   font-size: 13px;
   font-weight: 500;
+  color: var(--el-text-color-primary);
 }
 
 .group-header:hover {
@@ -358,6 +359,7 @@ onUnmounted(() => {
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
+  color: var(--el-text-color-regular);
 }
 
 .connection-item:hover {
@@ -385,6 +387,7 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--el-text-color-primary);
 }
 
 .conn-host {
@@ -407,6 +410,7 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(0,0,0,0.1);
   z-index: 2000;
   min-width: 120px;
+  color: var(--el-text-color-primary);
 }
 
 .context-menu div {
