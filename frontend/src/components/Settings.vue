@@ -49,7 +49,7 @@
       </el-tab-pane>
     </el-tabs>
 
-    <div class="save-button-wrapper">
+    <div class="save-button-wrapper" v-if="activeTab === 'terminal'">
       <el-button type="primary" @click="manualSave">保存设置</el-button>
     </div>
   </div>
