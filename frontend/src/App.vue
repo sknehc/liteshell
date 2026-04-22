@@ -64,7 +64,6 @@
         <el-form-item label="连接名称" required>
           <el-input v-model="formData.name" placeholder="例如：我的服务器" />
         </el-form-item>
-        <!-- 分组字段：非必填，支持选择或输入 -->
         <el-form-item label="分组">
           <el-autocomplete
               v-model="formData.group"
@@ -307,6 +306,8 @@ const toggleTheme = async () => {
   let newTheme = currentTheme === 'light' ? 'dark' : (currentTheme === 'dark' ? 'auto' : 'light')
   await saveConfigKey('appSettings', { ...config.appSettings, theme: newTheme })
   applyTheme(newTheme)
+  // 通知所有组件设置已更新（例如终端需要重新读取主题？终端不关心主题，但保持统一）
+  window.dispatchEvent(new CustomEvent('settings-updated'))
   ElMessage.success(`主题已切换至 ${newTheme === 'light' ? '亮色' : newTheme === 'dark' ? '暗色' : '跟随系统'}`)
 }
 
@@ -340,6 +341,10 @@ onMounted(async () => {
   await connectionStore.loadConfig()
   await loadSidebarWidth()
   await loadTheme()
+  // 监听设置更新事件，重新加载主题（例如从设置对话框保存后）
+  window.addEventListener('settings-updated', () => {
+    loadTheme()
+  })
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     loadTheme()
   })
@@ -453,6 +458,7 @@ onMounted(async () => {
   --el-bg-color: #1e1e1e;
   --el-bg-color-page: #141414;
   --el-bg-color-overlay: #1e1e1e;
+  --el-fill-color-blank: #1e1e1e;
   --el-text-color-primary: #ffffff;
   --el-text-color-regular: #f0f0f0;
   --el-text-color-secondary: #c0c0c0;
@@ -463,6 +469,40 @@ onMounted(async () => {
   --el-fill-color-lighter: #222222;
   --el-color-primary-light-9: #1a2a3a;
 }
+
+/* 覆盖 Element Plus 弹出层（下拉框、对话框、提示框等）背景色 */
+.dark-theme .el-select-dropdown,
+.dark-theme .el-popper,
+.dark-theme .el-dropdown__popper,
+.dark-theme .el-drawer,
+.dark-theme .el-dialog,
+.dark-theme .el-message-box,
+.dark-theme .el-tooltip__popper {
+  background-color: #1e1e1e !important;
+  border-color: #3a3a3a !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .el-select-dropdown__item {
+  color: #f0f0f0 !important;
+}
+
+.dark-theme .el-select-dropdown__item.hover,
+.dark-theme .el-select-dropdown__item:hover {
+  background-color: #2a2a2a !important;
+}
+
+.dark-theme .el-select-dropdown__item.selected {
+  color: var(--el-color-primary) !important;
+  background-color: #1a2a3a !important;
+}
+
+.dark-theme .el-popper__arrow::before {
+  background: #1e1e1e !important;
+  border-color: #3a3a3a !important;
+}
+
+/* 已有样式保留 */
 .dark-theme .el-button {
   color: #ffffff !important;
   background-color: #3a3a3a !important;

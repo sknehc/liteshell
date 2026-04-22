@@ -43,6 +43,7 @@ import 'xterm/css/xterm.css'
 import { Close, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import SFTPManager from './SFTPManager.vue'
+import { useSettingsStore } from '../stores/settingsStore'
 
 const props = defineProps<{
   connection: any
@@ -58,17 +59,91 @@ const ws = ref<WebSocket | null>(null)
 const connected = ref(false)
 const activeTab = ref('terminal')
 const isConnecting = ref(false)
-
 let copyTimeout: number | null = null
 
-const initTerminal = () => {
-  terminal = new Terminal({
-    cursorBlink: true,
+const settingsStore = useSettingsStore()
+
+// 安全获取设置（兜底默认值）
+const getSafeSettings = () => {
+  const settings = settingsStore.appSettings.value
+  if (settings && typeof settings.fontSize === 'number') {
+    return settings
+  }
+  return {
     fontSize: 14,
     fontFamily: 'Consolas, "Courier New", monospace',
+    backgroundColor: '#1e1e1e',
+    foregroundColor: '#d4d4d4'
+  }
+}
+
+// 应用终端设置（字体、颜色等）- 使用 setOption + 强制刷新内部渲染器
+const applyTerminalSettings = () => {
+  if (!terminal) {
+    console.warn('terminal 未初始化，跳过应用设置')
+    return
+  }
+  const settings = getSafeSettings()
+  const { fontSize, fontFamily, backgroundColor, foregroundColor } = settings
+  try {
+    // 方法1：使用官方 setOption（xterm@5.3.0 支持）
+    if (typeof terminal.setOption === 'function') {
+      terminal.setOption('fontSize', fontSize)
+      terminal.setOption('fontFamily', fontFamily)
+      terminal.setOption('theme', {
+        background: backgroundColor,
+        foreground: foregroundColor,
+        cursor: '#aeafad'
+      })
+    } else {
+      // 降级：直接修改 options
+      terminal.options.fontSize = fontSize
+      terminal.options.fontFamily = fontFamily
+      terminal.options.theme = {
+        background: backgroundColor,
+        foreground: foregroundColor,
+        cursor: '#aeafad'
+      }
+    }
+
+    // 强制内部渲染器更新主题和尺寸
+    const core = (terminal as any)._core
+    if (core && core._renderService && core._renderService._renderer) {
+      const renderer = core._renderService._renderer
+      if (typeof renderer.onThemeChange === 'function') {
+        renderer.onThemeChange()
+      }
+      if (typeof renderer.onDevicePixelRatioChange === 'function') {
+        renderer.onDevicePixelRatioChange()
+      }
+    }
+
+    // 强制重绘所有行
+    if (typeof terminal.refresh === 'function') {
+      terminal.refresh(0, terminal.rows - 1)
+    }
+
+    // 重新适应容器大小（会触发 resize 和重绘）
+    if (fitAddon) {
+      fitAddon.fit()
+    }
+
+    console.log('终端设置已应用:', { fontSize, fontFamily, backgroundColor, foregroundColor })
+  } catch (err) {
+    console.warn('应用终端设置失败', err)
+  }
+}
+
+// 初始化终端
+const initTerminal = () => {
+  const settings = getSafeSettings()
+  terminal = new Terminal({
+    cursorBlink: true,
+    fontSize: settings.fontSize,
+    fontFamily: settings.fontFamily,
     theme: {
-      background: '#1e1e1e',
-      foreground: '#d4d4d4',
+      background: settings.backgroundColor,
+      foreground: settings.foregroundColor,
       cursor: '#aeafad'
     },
     allowProposedApi: true
@@ -120,6 +195,7 @@ const initTerminal = () => {
   })
 }
 
+// SSH 连接
 const connectSSH = () => {
   if (ws.value) {
     if (ws.value.readyState === WebSocket.OPEN) {
@@ -156,6 +232,7 @@ const connectSSH = () => {
         connected.value = true
         isConnecting.value = false
         ElMessage.success('SSH连接成功')
+        applyTerminalSettings()
         if (terminal && activeTab.value === 'terminal') terminal.focus()
         break
       case 'ssh-data':
@@ -203,10 +280,31 @@ const reconnect = async () => {
   connectSSH()
 }
 
-onMounted(() => {
+// 监听设置变化（深度监听）
+watch(
+    () => settingsStore.appSettings.value,
+    (newSettings, oldSettings) => {
+      if (terminal) {
+        applyTerminalSettings()
+      }
+    },
+    { deep: true, immediate: false }
+)
+
+// 手动触发设置更新的事件监听
+const onSettingsUpdated = () => {
+  if (terminal) {
+    applyTerminalSettings()
+  }
+}
+
+onMounted(async () => {
+  await settingsStore.loadSettings()
+  console.log('设置加载完成:', settingsStore.appSettings.value)
   initTerminal()
   connectSSH()
   window.addEventListener('resize', handleResize)
+  window.addEventListener('settings-updated', onSettingsUpdated)
 })
 
 onUnmounted(() => {
@@ -219,6 +317,7 @@ onUnmounted(() => {
   }
   if (terminal) terminal.dispose()
   window.removeEventListener('resize', handleResize)
+  window.removeEventListener('settings-updated', onSettingsUpdated)
   if (copyTimeout) clearTimeout(copyTimeout)
 })
 
@@ -241,7 +340,6 @@ watch(activeTab, (newVal) => {
   flex-direction: column;
   overflow: hidden;
 }
-
 .terminal-toolbar {
   flex-shrink: 0;
   display: flex;
@@ -251,20 +349,17 @@ watch(activeTab, (newVal) => {
   border-bottom: 1px solid var(--el-border-color);
   background: var(--el-bg-color-page);
 }
-
 .connection-info {
   display: flex;
   align-items: center;
   gap: 12px;
   font-size: 13px;
-  color: var(--el-text-color-primary);  /* 新增：确保连接信息文字颜色跟随主题 */
+  color: var(--el-text-color-primary);
 }
-
 .toolbar-actions {
   display: flex;
   gap: 8px;
 }
-
 .inner-tabs {
   flex: 1;
   display: flex;
@@ -273,12 +368,10 @@ watch(activeTab, (newVal) => {
   min-height: 0;
   padding-left: 12px;
 }
-
 .inner-tabs :deep(.el-tabs__header) {
   flex-shrink: 0;
   margin: 0;
 }
-
 .inner-tabs :deep(.el-tabs__content) {
   flex: 1;
   display: flex;
@@ -286,20 +379,16 @@ watch(activeTab, (newVal) => {
   overflow: hidden;
   min-height: 0;
 }
-
 .inner-tabs :deep(.el-tab-pane) {
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-
 .terminal-container {
   height: 100%;
   padding: 4px;
-  background: #1e1e1e;
 }
-
 .sftp-placeholder {
   height: 100%;
   display: flex;

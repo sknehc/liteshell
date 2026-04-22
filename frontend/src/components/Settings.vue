@@ -4,57 +4,57 @@
       <el-tab-pane label="界面设置" name="appearance">
         <el-form label-width="100px">
           <el-form-item label="主题">
-            <el-select v-model="settings.theme">
+            <el-select v-model="localSettings.theme">
               <el-option label="浅色" value="light" />
               <el-option label="深色" value="dark" />
               <el-option label="跟随系统" value="auto" />
             </el-select>
           </el-form-item>
           <el-form-item label="语言">
-            <el-select v-model="settings.language">
+            <el-select v-model="localSettings.language">
               <el-option label="中文" value="zh-CN" />
               <el-option label="English" value="en-US" />
             </el-select>
           </el-form-item>
         </el-form>
       </el-tab-pane>
-      
+
       <el-tab-pane label="终端设置" name="terminal">
         <el-form label-width="100px">
           <el-form-item label="字体大小">
-            <el-input-number v-model="settings.fontSize" :min="10" :max="24" />
+            <el-input-number v-model="localSettings.fontSize" :min="10" :max="24" />
           </el-form-item>
           <el-form-item label="字体家族">
-            <el-select v-model="settings.fontFamily">
+            <el-select v-model="localSettings.fontFamily">
               <el-option label="Consolas" value="Consolas" />
               <el-option label="Monaco" value="Monaco" />
               <el-option label="Courier New" value="Courier New" />
             </el-select>
           </el-form-item>
           <el-form-item label="背景色">
-            <el-color-picker v-model="settings.backgroundColor" />
+            <el-color-picker v-model="localSettings.backgroundColor" />
           </el-form-item>
           <el-form-item label="前景色">
-            <el-color-picker v-model="settings.foregroundColor" />
+            <el-color-picker v-model="localSettings.foregroundColor" />
           </el-form-item>
         </el-form>
       </el-tab-pane>
-      
+
       <el-tab-pane label="文件管理" name="file">
         <el-form label-width="100px">
           <el-form-item label="默认本地路径">
-            <el-input v-model="settings.defaultLocalPath" placeholder="/home/user" />
+            <el-input v-model="localSettings.defaultLocalPath" placeholder="/home/user" />
           </el-form-item>
           <el-form-item label="并发数">
-            <el-input-number v-model="settings.concurrentUploads" :min="1" :max="10" />
+            <el-input-number v-model="localSettings.concurrentUploads" :min="1" :max="10" />
           </el-form-item>
         </el-form>
       </el-tab-pane>
-      
+
       <el-tab-pane label="通用设置" name="general">
         <el-form label-width="100px">
           <el-form-item label="确认提示">
-            <el-switch v-model="settings.confirmDelete" />
+            <el-switch v-model="localSettings.confirmDelete" />
           </el-form-item>
           <el-form-item label="清除缓存">
             <el-button type="danger" @click="clearCache">清除所有本地数据</el-button>
@@ -62,7 +62,6 @@
         </el-form>
       </el-tab-pane>
 
-      <!-- 新增：数据管理选项卡 -->
       <el-tab-pane label="数据管理" name="data">
         <el-form label-width="100px">
           <el-form-item label="导出配置">
@@ -71,12 +70,12 @@
           </el-form-item>
           <el-form-item label="导入配置">
             <el-upload
-              ref="uploadRef"
-              action="#"
-              :auto-upload="false"
-              :show-file-list="false"
-              :on-change="handleImportFile"
-              accept=".json"
+                ref="uploadRef"
+                action="#"
+                :auto-upload="false"
+                :show-file-list="false"
+                :on-change="handleImportFile"
+                accept=".json"
             >
               <el-button type="warning">选择 JSON 文件并导入</el-button>
             </el-upload>
@@ -89,18 +88,25 @@
         </el-form>
       </el-tab-pane>
     </el-tabs>
+
+    <div class="save-button-wrapper">
+      <el-button type="primary" @click="manualSave">保存设置</el-button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadProps } from 'element-plus'
 import { getConfig, saveConfig, saveConfigKey } from '../api/config'
+import { useSettingsStore } from '../stores/settingsStore'
 
 const activeTab = ref('appearance')
+const settingsStore = useSettingsStore()
 
-const settings = reactive({
+// 本地表单数据
+const localSettings = reactive({
   theme: 'auto',
   language: 'zh-CN',
   fontSize: 14,
@@ -112,38 +118,30 @@ const settings = reactive({
   confirmDelete: true
 })
 
-const loadSettings = async () => {
-  const config = await getConfig()
-  if (config.appSettings) {
-    Object.assign(settings, config.appSettings)
-  }
-  applyTheme()
+// 从 store 加载数据到本地
+const loadLocalSettings = async () => {
+  await settingsStore.loadSettings()
+  Object.assign(localSettings, settingsStore.appSettings.value)
+  // 不再在此处直接调用 applyTheme，交给 App.vue 统一处理
 }
 
-const saveSettings = async () => {
-  await saveConfigKey('appSettings', { ...settings })
-  applyTheme()
+// 保存所有设置
+const saveAllSettings = async () => {
+  await settingsStore.saveSettings(localSettings)
+  // 触发全局事件，通知 App.vue 重新加载主题，通知终端重新应用设置
+  window.dispatchEvent(new CustomEvent('settings-updated'))
+  ElMessage.success('设置已保存')
 }
 
-const applyTheme = () => {
-  if (settings.theme === 'dark' || (settings.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-  }
+const manualSave = async () => {
+  await saveAllSettings()
 }
 
 const clearCache = async () => {
   await ElMessageBox.confirm('清除所有本地缓存将删除所有连接配置、设置和命令历史，确定吗？', '警告', { type: 'warning' })
-  // 清空所有配置（重置为默认）
   const defaultConfig = {
     "connections": [],
-    "groups": [
-      {
-        "id": "1776693493484",
-        "name": "默认分组"
-      }
-    ],
+    "groups": [{ "id": "1776693493484", "name": "默认分组" }],
     "appSettings": {
       "theme": "auto",
       "language": "zh-CN",
@@ -155,28 +153,17 @@ const clearCache = async () => {
       "concurrentUploads": 3,
       "confirmDelete": true
     },
-    "sftp_col_widths": {
-      "name": 300,
-      "size": 100,
-      "time": 160,
-      "perm": 180
-    },
-    "sftp_sort": {
-      "field": "name",
-      "order": "asc"
-    },
+    "sftp_col_widths": { "name": 300, "size": 100, "time": 160, "perm": 180 },
+    "sftp_sort": { "field": "name", "order": "asc" },
     "sftp_overwrite_prefs": {},
     "sidebarWidth": 215,
-    "expandedGroups": {
-      "1776693493484": true
-    }
+    "expandedGroups": { "1776693493484": true }
   }
   await saveConfig(defaultConfig)
   ElMessage.success('缓存已清除，页面将刷新')
   setTimeout(() => location.reload(), 1000)
 }
 
-// 导出配置
 const exportConfig = async () => {
   const config = await getConfig()
   const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' })
@@ -212,12 +199,7 @@ const clearAllData = async () => {
     await ElMessageBox.confirm('清除所有本地数据将删除所有连接、分组、设置等，此操作不可恢复。确定吗？', '警告', { type: 'warning' })
     const defaultConfig = {
       "connections": [],
-      "groups": [
-        {
-          "id": "1776693493484",
-          "name": "默认分组"
-        }
-      ],
+      "groups": [{ "id": "1776693493484", "name": "默认分组" }],
       "appSettings": {
         "theme": "auto",
         "language": "zh-CN",
@@ -229,49 +211,38 @@ const clearAllData = async () => {
         "concurrentUploads": 3,
         "confirmDelete": true
       },
-      "sftp_col_widths": {
-        "name": 300,
-        "size": 100,
-        "time": 160,
-        "perm": 180
-      },
-      "sftp_sort": {
-        "field": "name",
-        "order": "asc"
-      },
+      "sftp_col_widths": { "name": 300, "size": 100, "time": 160, "perm": 180 },
+      "sftp_sort": { "field": "name", "order": "asc" },
       "sftp_overwrite_prefs": {},
       "sidebarWidth": 215,
-      "expandedGroups": {
-        "1776693493484": true
-      }
+      "expandedGroups": { "1776693493484": true }
     }
     await saveConfig(defaultConfig)
     ElMessage.success('已清除所有数据，页面即将刷新')
     setTimeout(() => location.reload(), 1000)
-  } catch {
-    // 取消
-  }
+  } catch { /* 取消 */ }
 }
 
-watch(settings, () => {
-  saveSettings()
-}, { deep: true })
-
-onMounted(() => {
-  loadSettings()
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    if (settings.theme === 'auto') applyTheme()
-  })
+onMounted(async () => {
+  await loadLocalSettings()
 })
 </script>
 
 <style scoped>
 .settings-container {
   padding: 16px;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-primary);
 }
 .form-tip {
   font-size: 12px;
   color: var(--el-text-color-secondary);
   margin-top: 4px;
+}
+.save-button-wrapper {
+  margin-top: 24px;
+  text-align: center;
+  padding: 16px 0;
+  border-top: 1px solid var(--el-border-color);
 }
 </style>
