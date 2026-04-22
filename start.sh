@@ -5,6 +5,6 @@ node server.js &
 
 echo "启动前端静态服务器..."
 cd /app/frontend
-serve -s dist -l 5173 --no-request-logging --no-update-notifier &
+http-server dist -p 5173 --silent &
 
 wait

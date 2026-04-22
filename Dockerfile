@@ -8,8 +8,7 @@ RUN npm run build
 FROM node:22-alpine
 WORKDIR /app
 
-# 安装一个轻量静态服务器（如 serve）
-RUN npm install -g serve
+RUN npm install -g http-server
 
 COPY backend/package*.json ./backend/
 RUN cd backend && npm install --production
