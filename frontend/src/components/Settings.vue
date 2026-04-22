@@ -1,23 +1,35 @@
 <template>
-  <div class="settings-container">
+  <div class="settings-container" v-if="loaded">
     <el-tabs v-model="activeTab">
       <el-tab-pane label="终端设置" name="terminal">
         <el-form label-width="100px">
           <el-form-item label="字体大小">
-            <el-input-number v-model="localSettings.fontSize" :min="10" :max="24" style="width: 140px;" />
+            <el-input-number v-model="localSettings.fontSize" :min="10" :max="24" style="width: 160px;" />
           </el-form-item>
           <el-form-item label="字体家族">
-            <el-select v-model="localSettings.fontFamily" style="width: 140px;">
+            <el-select v-model="localSettings.fontFamily" style="width: 160px;">
               <el-option label="Consolas" value="Consolas" />
               <el-option label="Monaco" value="Monaco" />
               <el-option label="Courier New" value="Courier New" />
             </el-select>
           </el-form-item>
-          <el-form-item label="背景颜色">
-            <el-color-picker v-model="localSettings.backgroundColor" />
+          <el-row :gutter="10">
+            <el-col :span="12">
+              <el-form-item label="背景颜色">
+                <el-color-picker v-model="localSettings.backgroundColor" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="字体颜色" label-width="80px">
+                <el-color-picker v-model="localSettings.foregroundColor" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-form-item label="右键粘贴">
+            <el-switch v-model="localSettings.rightClickPaste" style="width: 140px;" />
           </el-form-item>
-          <el-form-item label="字体颜色">
-            <el-color-picker v-model="localSettings.foregroundColor" />
+          <el-form-item>
+            <el-button type="default" @click="resetToDefault">还原默认</el-button>
           </el-form-item>
         </el-form>
       </el-tab-pane>
@@ -64,6 +76,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 
 const activeTab = ref('terminal')
 const settingsStore = useSettingsStore()
+const loaded = ref(false)
 
 // 本地表单数据
 const localSettings = reactive({
@@ -75,22 +88,42 @@ const localSettings = reactive({
   foregroundColor: '#d4d4d4',
   defaultLocalPath: '',
   concurrentUploads: 3,
-  confirmDelete: true
+  confirmDelete: true,
+  rightClickPaste: false
 })
 
-// 从 store 加载数据到本地
+// 从后端加载最新设置
 const loadLocalSettings = async () => {
-  await settingsStore.loadSettings()
-  Object.assign(localSettings, settingsStore.appSettings.value)
+  // 直接从后端获取，确保最新
+  const config = await getConfig()
+  const appSettings = config?.appSettings || {}
+  Object.assign(localSettings, {
+    fontSize: appSettings.fontSize ?? 14,
+    fontFamily: appSettings.fontFamily ?? 'Consolas',
+    backgroundColor: appSettings.backgroundColor ?? '#1e1e1e',
+    foregroundColor: appSettings.foregroundColor ?? '#d4d4d4',
+    rightClickPaste: appSettings.rightClickPaste ?? false
+  })
+  // 同时更新 store（可选）
+  settingsStore.appSettings.value = { ...settingsStore.appSettings.value, ...appSettings }
+  loaded.value = true
 }
-
+const resetToDefault = () => {
+  localSettings.fontSize = 14
+  localSettings.fontFamily = 'Consolas'
+  localSettings.backgroundColor = '#1e1e1e'
+  localSettings.foregroundColor = '#d4d4d4'
+  localSettings.rightClickPaste = false
+  ElMessage.info('已恢复默认设置，请点击“保存设置”生效')
+}
 // 保存所有设置（只保存终端相关字段）
 const saveAllSettings = async () => {
   const settingsToSave = {
     fontSize: localSettings.fontSize,
     fontFamily: localSettings.fontFamily,
     backgroundColor: localSettings.backgroundColor,
-    foregroundColor: localSettings.foregroundColor
+    foregroundColor: localSettings.foregroundColor,
+    rightClickPaste: localSettings.rightClickPaste
   }
   await settingsStore.saveSettings(settingsToSave)
   window.dispatchEvent(new CustomEvent('settings-updated'))
@@ -146,7 +179,8 @@ const clearAllData = async () => {
         "foregroundColor": "#d4d4d4",
         "defaultLocalPath": "",
         "concurrentUploads": 3,
-        "confirmDelete": true
+        "confirmDelete": true,
+        "rightClickPaste": false
       },
       "sftp_col_widths": { "name": 300, "size": 100, "time": 160, "perm": 180 },
       "sftp_sort": { "field": "name", "order": "asc" },

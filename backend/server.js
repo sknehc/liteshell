@@ -37,7 +37,8 @@ const defaultConfig = {
     "foregroundColor": "#d4d4d4",
     "defaultLocalPath": "",
     "concurrentUploads": 3,
-    "confirmDelete": true
+    "confirmDelete": true,
+    "rightClickPaste": false
   },
   "sftp_col_widths": { "name": 300, "size": 100, "time": 160, "perm": 180 },
   "sftp_sort": { "field": "name", "order": "asc" },

@@ -50,8 +50,6 @@ const props = defineProps<{
   sessionId: string
 }>()
 
-const emit = defineEmits(['close'])
-
 const terminalRef = ref<HTMLElement>()
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -70,7 +68,8 @@ const fetchSettings = async () => {
       fontSize: settings.fontSize ?? 14,
       fontFamily: settings.fontFamily ?? 'Consolas, "Courier New", monospace',
       backgroundColor: settings.backgroundColor ?? '#1e1e1e',
-      foregroundColor: settings.foregroundColor ?? '#d4d4d4'
+      foregroundColor: settings.foregroundColor ?? '#d4d4d4',
+      rightClickPaste: settings.rightClickPaste ?? false
     }
   } catch (err) {
     console.error('获取终端设置失败', err)
@@ -81,6 +80,41 @@ const fetchSettings = async () => {
       foregroundColor: '#d4d4d4'
     }
   }
+}
+
+let currentContextMenuHandler: ((e: MouseEvent) => void) | null = null
+// 绑定右键菜单
+const bindContextMenu = (enable: boolean) => {
+  const container = terminalRef.value
+  if (!container) return
+  // 移除旧监听
+  if (currentContextMenuHandler) {
+    container.removeEventListener('contextmenu', currentContextMenuHandler)
+    currentContextMenuHandler = null
+  }
+  if (!enable) return
+  // 新监听
+  const handler = async (e: MouseEvent) => {
+    e.preventDefault()
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text && terminal) {
+        terminal.write(text)
+        if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+          ws.value.send(JSON.stringify({
+            type: 'ssh-data',
+            sessionId: props.sessionId,
+            data: text
+          }))
+        }
+      }
+    } catch (err) {
+      console.warn('读取剪贴板失败', err)
+      ElMessage.warning('无法读取剪贴板，请检查浏览器权限')
+    }
+  }
+  container.addEventListener('contextmenu', handler)
+  currentContextMenuHandler = handler
 }
 
 // 应用终端设置（异步获取最新配置）
@@ -154,6 +188,7 @@ const applyTerminalSettings = async () => {
   } catch (err) {
     console.warn('应用终端设置失败', err)
   }
+  bindContextMenu(settings.rightClickPaste === true)
 }
 
 // 初始化终端（异步获取配置）
@@ -405,5 +440,9 @@ watch(activeTab, (newVal) => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.xterm-cursor-block {
+  width: 4px !important;
+  background-color: rgba(255,255,255,0.7);
 }
 </style>

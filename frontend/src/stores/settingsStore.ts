@@ -11,7 +11,8 @@ const DEFAULT_SETTINGS = {
     foregroundColor: '#d4d4d4',
     defaultLocalPath: '',
     concurrentUploads: 3,
-    confirmDelete: true
+    confirmDelete: true,
+    rightClickPaste: false
 }
 
 export const useSettingsStore = defineStore('settings', () => {

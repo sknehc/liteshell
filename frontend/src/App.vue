@@ -26,8 +26,8 @@
           </div>
         </div>
         <div class="header-actions">
-          <el-button :icon="isDark ? Sunny : Moon" circle size="small" @click="toggleTheme" />
-          <el-button :icon="Setting" circle size="small" @click="showSettings = true" />
+          <el-button :icon="isDark ? Sunny : Moon" circle @click="toggleTheme" />
+          <el-button :icon="Setting" circle @click="showSettings = true" />
         </div>
       </div>
 
@@ -101,7 +101,7 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="showSettings" title="系统设置" direction="rtl" size="400px">
+    <el-drawer v-model="showSettings" title="系统设置" direction="rtl" size="360px" destroy-on-close>
       <Settings />
     </el-drawer>
   </div>
@@ -519,5 +519,18 @@ onMounted(async () => {
 }
 .dark-theme .el-input__inner {
   color: #ffffff !important;
+}
+
+.dark-theme .tabs .tab span {
+  color: #f0f0f0;
+}
+.dark-theme .tabs .tab.active span {
+  color: var(--el-color-primary);
+}
+.dark-theme .tabs .tab .close-tab {
+  color: #c0c0c0;
+}
+.dark-theme .tabs .tab .close-tab:hover {
+  color: #ffffff;
 }
 </style>
