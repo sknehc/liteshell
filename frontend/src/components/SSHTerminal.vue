@@ -50,6 +50,8 @@ const props = defineProps<{
   sessionId: string
 }>()
 
+const emit = defineEmits(['close'])
+
 const terminalRef = ref<HTMLElement>()
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -266,7 +268,7 @@ const connectSSH = () => {
   }
 
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${wsProtocol}//${window.location.hostname}:3001`
+  const wsUrl = `${wsProtocol}//${window.location.host}/ws`
 
   ws.value = new WebSocket(wsUrl)
 
@@ -379,7 +381,6 @@ watch(activeTab, (newVal) => {
 </script>
 
 <style scoped>
-/* 样式保持不变 */
 .ssh-terminal-container {
   height: 100%;
   display: flex;

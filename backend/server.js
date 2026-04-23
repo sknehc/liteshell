@@ -11,7 +11,8 @@ const { SSHManager } = require('./services/sshManager');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+// WebSocket 挂载到 /ws 路径
+const wss = new WebSocket.Server({ server, path: '/ws' });
 
 app.use(cors());
 app.use(express.json());
@@ -56,21 +57,15 @@ function loadConfig() {
     }
     const data = fs.readFileSync(CONFIG_FILE, 'utf8');
     let config = JSON.parse(data);
-
     const merged = { ...defaultConfig, ...config };
-
-    // 强制保证 groups 包含“默认分组”
     if (!merged.groups || merged.groups.length === 0) {
       merged.groups = [{ id: Date.now().toString(), name: '默认分组' }];
     } else if (!merged.groups.some(g => g.name === '默认分组')) {
       merged.groups.push({ id: Date.now().toString(), name: '默认分组' });
     }
-
-    // 强制保证 expandedGroups 存在
     if (!merged.expandedGroups || typeof merged.expandedGroups !== 'object') {
       merged.expandedGroups = { [merged.groups[0].id]: true };
     }
-
     console.log('✅ 配置加载成功');
     return merged;
   } catch (err) {
@@ -81,7 +76,6 @@ function loadConfig() {
 
 function saveConfig(config) {
   try {
-    // 确保保存时 groups 和 expandedGroups 完整
     if (!config.groups || config.groups.length === 0) {
       config.groups = [{ id: Date.now().toString(), name: '默认分组' }];
     }
@@ -275,11 +269,9 @@ app.post('/api/sftp/download-folder', async (req, res) => {
   const { sessionId, folderPath } = req.body;
   if (!sessionId || !folderPath) return res.status(400).json({ success: false, error: '缺少必要参数' });
   if (!sessions.has(sessionId)) return res.status(404).json({ success: false, error: '会话不存在' });
-
   const folderName = path.basename(folderPath);
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(folderName + '.zip')}`);
   res.setHeader('Content-Type', 'application/zip');
-
   const archive = archiver('zip', { zlib: { level: 9 } });
   archive.on('error', (err) => {
     console.error('Archive error:', err);
@@ -287,7 +279,6 @@ app.post('/api/sftp/download-folder', async (req, res) => {
     else res.end();
   });
   archive.pipe(res);
-
   try {
     await addFolderToArchive(sessionId, folderPath, archive, folderName);
     await archive.finalize();
@@ -358,8 +349,20 @@ app.post('/api/ssh/test', async (req, res) => {
 
 if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
 
+// ========== 生产环境托管前端静态文件 ==========
+if (process.env.NODE_ENV === 'production') {
+  const staticPath = path.join(__dirname, '../frontend/dist');
+  // 托管静态资源
+  app.use(express.static(staticPath));
+  // 所有非 API 和非 WebSocket 的请求返回 index.html（支持前端路由）
+  app.get('*', (req, res, next) => {
+    if (req.url.startsWith('/api') || req.url === '/ws') return next();
+    res.sendFile(path.join(staticPath, 'index.html'));
+  });
+}
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Backend server running on port ${PORT}`);
-  console.log(`WebSocket server available at ws://localhost:${PORT}`);
+  console.log(`WebSocket server available at ws://localhost:${PORT}/ws`);
 });

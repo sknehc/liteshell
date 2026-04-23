@@ -223,27 +223,42 @@ const saveConnectionHandler = async () => {
   connectionDialogVisible.value = false
 }
 
-// 侧边栏宽度
-const sidebarWidth = ref(280)
+// 侧边栏宽度 - 使用 localStorage 同步存储避免闪烁
+const SIDEBAR_WIDTH_KEY = 'sidebarWidth'
+const DEFAULT_WIDTH = 215
+
+const getStoredSidebarWidth = (): number => {
+  const stored = localStorage.getItem(SIDEBAR_WIDTH_KEY)
+  if (stored !== null) {
+    const num = parseInt(stored, 10)
+    if (!isNaN(num) && num >= 200 && num <= 600) return num
+  }
+  return DEFAULT_WIDTH
+}
+
+const sidebarWidth = ref(getStoredSidebarWidth())
 let isResizing = false
 let startX = 0
 let startWidth = 0
+
+const saveSidebarWidth = async (width: number) => {
+  localStorage.setItem(SIDEBAR_WIDTH_KEY, width.toString())
+  await saveConfigKey('sidebarWidth', width)
+}
 
 const loadSidebarWidth = async () => {
   try {
     const config = await getConfig()
     if (config && typeof config.sidebarWidth === 'number') {
-      sidebarWidth.value = config.sidebarWidth
-    } else {
-      sidebarWidth.value = 280
+      const newWidth = Math.max(215, config.sidebarWidth)
+      if (sidebarWidth.value !== newWidth) {
+        sidebarWidth.value = newWidth
+        localStorage.setItem(SIDEBAR_WIDTH_KEY, newWidth.toString())
+      }
     }
   } catch (err) {
     console.error('加载侧边栏宽度失败:', err)
-    sidebarWidth.value = 280
   }
-}
-const saveSidebarWidth = async () => {
-  await saveConfigKey('sidebarWidth', sidebarWidth.value)
 }
 
 const startResize = (e: MouseEvent) => {
@@ -254,17 +269,22 @@ const startResize = (e: MouseEvent) => {
   document.addEventListener('mouseup', stopResize)
   e.preventDefault()
 }
+
 const onMouseMove = (e: MouseEvent) => {
   if (!isResizing) return
   const delta = e.clientX - startX
   let newWidth = startWidth + delta
-  if (newWidth < 200) newWidth = 200
-  if (newWidth > 600) newWidth = 600
+  if (newWidth < 215) newWidth = 215
+  if (newWidth > 400) newWidth = 400
   sidebarWidth.value = newWidth
+  // 实时保存到 localStorage，拖拽过程中立即生效，避免闪烁
+  localStorage.setItem(SIDEBAR_WIDTH_KEY, newWidth.toString())
 }
+
 const stopResize = () => {
   isResizing = false
-  saveSidebarWidth()
+  // 拖拽结束后保存到后端
+  saveSidebarWidth(sidebarWidth.value)
   document.removeEventListener('mousemove', onMouseMove)
   document.removeEventListener('mouseup', stopResize)
 }
@@ -306,7 +326,6 @@ const toggleTheme = async () => {
   let newTheme = currentTheme === 'light' ? 'dark' : (currentTheme === 'dark' ? 'auto' : 'light')
   await saveConfigKey('appSettings', { ...config.appSettings, theme: newTheme })
   applyTheme(newTheme)
-  // 通知所有组件设置已更新（例如终端需要重新读取主题？终端不关心主题，但保持统一）
   window.dispatchEvent(new CustomEvent('settings-updated'))
   ElMessage.success(`主题已切换至 ${newTheme === 'light' ? '亮色' : newTheme === 'dark' ? '暗色' : '跟随系统'}`)
 }
@@ -339,9 +358,8 @@ const closeTab = (tabId: string) => {
 
 onMounted(async () => {
   await connectionStore.loadConfig()
-  await loadSidebarWidth()
+  await loadSidebarWidth()  // 从后端同步最新值（如果与 localStorage 不同会更新）
   await loadTheme()
-  // 监听设置更新事件，重新加载主题（例如从设置对话框保存后）
   window.addEventListener('settings-updated', () => {
     loadTheme()
   })
@@ -364,16 +382,17 @@ onMounted(async () => {
   flex-shrink: 0;
   border-right: 1px solid var(--el-border-color);
   overflow-y: auto;
-  transition: none;
+  transition: width 0.05s ease;
 }
 .resizer {
-  width: 4px;
+  width: 1px;
   cursor: col-resize;
-  background: transparent;
-  transition: background 0.2s;
+  background: var(--el-border-color);
+  transition: all 0.2s;
   flex-shrink: 0;
 }
 .resizer:hover {
+  width: 4px;
   background: var(--el-color-primary);
 }
 .main-content {
@@ -445,7 +464,7 @@ onMounted(async () => {
 </style>
 
 <style>
-/* 全局样式覆盖 */
+/* 全局样式覆盖（保持不变） */
 .connection-list .list-header {
   border-bottom: none !important;
 }
@@ -473,7 +492,6 @@ onMounted(async () => {
   --el-color-primary-light-9: #1a2a3a;
 }
 
-/* 覆盖 Element Plus 弹出层（下拉框、对话框、提示框等）背景色 */
 .dark-theme .el-select-dropdown,
 .dark-theme .el-popper,
 .dark-theme .el-dropdown__popper,
@@ -505,7 +523,6 @@ onMounted(async () => {
   border-color: #3a3a3a !important;
 }
 
-/* 已有样式保留 */
 .dark-theme .el-button {
   color: #ffffff !important;
   background-color: #3a3a3a !important;
