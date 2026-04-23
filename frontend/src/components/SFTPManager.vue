@@ -26,12 +26,19 @@
       <div class="remote-panel">
         <div class="panel-header">
           <div class="path-bar">
-            <el-breadcrumb separator="/" class="path-breadcrumb">
-              <el-breadcrumb-item v-for="(part, idx) in currentPathParts" :key="idx">
-                <span class="breadcrumb-link" @click="navigateToPath(idx)">{{ part }}</span>
-              </el-breadcrumb-item>
-            </el-breadcrumb>
-            <el-button size="small" :icon="DArrowRight" @click="goToPath" title="跳转到路径" />
+            <!-- 自定义面包屑：根目录显示 / -->
+            <div class="custom-breadcrumb">
+              <span class="breadcrumb-item" @click="navigateToPath(0)">
+
+              </span>
+              <template v-for="(part, idx) in currentPathParts" :key="idx">
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item" @click="navigateToPath(idx + 1)">
+                  <span class="breadcrumb-link">{{ part }}</span>
+                </span>
+              </template>
+            </div>
+            <el-button size="small" :icon="DArrowRight" @click="goToPathSafe" title="跳转到路径" />
             <el-button size="small" :icon="CopyDocument" @click="copyPath" title="复制完整路径" />
           </div>
         </div>
@@ -58,6 +65,14 @@
             </div>
           </div>
           <div class="file-list">
+            <!-- 返回上级目录 -->
+            <div v-if="currentPath !== '/'" class="file-item" @click="goUpDirectory">
+              <div class="col-name">
+                <el-icon><Folder /></el-icon>
+                <span class="clickable-name">..</span>
+              </div>
+            </div>
+            <!-- 正常文件/文件夹 -->
             <div
                 v-for="file in sortedFiles"
                 :key="file.name"
@@ -75,8 +90,9 @@
                   @dragend="onDragEnd"
                   @dblclick="openEditor(file)"
               >
-                <el-icon @click.stop="handleNameClick(file)" class="clickable-icon">
-                  <Folder v-if="file.type === 'directory'" /><Document v-else />
+                <el-icon :class="{ 'folder-icon': file.type === 'directory' }" @click.stop="handleNameClick(file)">
+                  <Folder v-if="file.type === 'directory'" />
+                  <Document v-else />
                 </el-icon>
                 <span @click.stop="handleNameClick(file)" class="clickable-name">{{ file.name }}</span>
               </div>
@@ -90,8 +106,11 @@
                 {{ formatPermissions(file) }}
               </div>
             </div>
-            <div v-if="filteredFiles.length === 0" class="empty-list">
+            <div v-if="filteredFiles.length === 0 && currentPath !== '/'" class="empty-list">
               <el-empty description="暂无文件" />
+            </div>
+            <div v-if="filteredFiles.length === 0 && currentPath === '/'" class="empty-list">
+              <el-empty description="目录为空" />
             </div>
           </div>
         </div>
@@ -199,8 +218,108 @@ const selectedFile = ref<any>(null)
 const searchText = ref('')
 const transfers = ref<any[]>([])
 let messageHandler: ((event: MessageEvent) => void) | null = null
+const isNavigating = ref(false)
 
-// ================== 列宽调整（后端存储） ==================
+// ========== 自定义面包屑 ==========
+// 返回路径部分数组（不含根目录）
+const currentPathParts = computed(() => {
+  return currentPath.value.split('/').filter(p => p)
+})
+
+// 根据索引获取完整路径（0 表示根目录）
+const getPathFromIndex = (idx: number) => {
+  if (idx === 0) return '/'
+  const parts = currentPathParts.value.slice(0, idx)
+  return '/' + parts.join('/')
+}
+
+// ========== 请求 ID 管理（用于安全导航） ==========
+let sftpRequestId = 0
+const pendingRequests = new Map<number, { resolve: Function; reject: Function }>()
+
+// 安全导航函数（验证目录可访问后再跳转）
+const navigateToSafePath = async (targetPath: string): Promise<boolean> => {
+  if (!props.sshReady || !props.ws || props.ws.readyState !== WebSocket.OPEN) {
+    ElMessage.warning('SSH 连接未就绪')
+    return false
+  }
+  if (isNavigating.value) {
+    ElMessage.info('正在切换目录，请稍后...')
+    return false
+  }
+  isNavigating.value = true
+
+  const requestId = ++sftpRequestId
+  return new Promise<boolean>((resolve) => {
+    pendingRequests.set(requestId, {
+      resolve: (result: any) => {
+        currentPath.value = targetPath
+        files.value = result.files
+        isNavigating.value = false
+        resolve(true)
+      },
+      reject: (err: Error) => {
+        ElMessage.error(`无法访问目录：${err.message || '权限不足或目录不存在'}`)
+        isNavigating.value = false
+        resolve(false)
+      }
+    })
+
+    props.ws!.send(JSON.stringify({
+      type: 'sftp-list',
+      sessionId: props.sessionId,
+      path: targetPath,
+      requestId
+    }))
+
+    setTimeout(() => {
+      if (pendingRequests.has(requestId)) {
+        pendingRequests.delete(requestId)
+        isNavigating.value = false
+        ElMessage.error('请求超时，无法进入目录')
+        resolve(false)
+      }
+    }, 10000)
+  })
+}
+
+// 面包屑点击导航
+const navigateToPath = async (idx: number) => {
+  await navigateToSafePath(getPathFromIndex(idx))
+}
+
+// 返回上级目录
+const goUpDirectory = async () => {
+  if (currentPath.value === '/') return
+  const parentPath = currentPath.value.substring(0, currentPath.value.lastIndexOf('/')) || '/'
+  await navigateToSafePath(parentPath)
+}
+
+// 跳转路径对话框（安全）
+const goToPathSafe = async () => {
+  const { value: inputPath } = await ElMessageBox.prompt('请输入服务器路径（绝对路径）', '跳转到路径', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    inputValue: currentPath.value,
+    inputPattern: /^\//,
+    inputErrorMessage: '路径必须以 / 开头'
+  })
+  if (inputPath) {
+    let newPath = inputPath.trim()
+    if (newPath !== '/' && newPath.endsWith('/')) {
+      newPath = newPath.slice(0, -1)
+    }
+    await navigateToSafePath(newPath)
+  }
+}
+
+// 复制路径
+const copyPath = () => {
+  navigator.clipboard.writeText(currentPath.value === '/' ? '/' : currentPath.value)
+  ElMessage.success('路径已复制')
+}
+
+// ========== 列宽调整 ==========
 const colWidths = ref({ name: 300, size: 100, time: 160, perm: 180 })
 const gridTemplateCols = computed(() => `${colWidths.value.name}px ${colWidths.value.size}px ${colWidths.value.time}px ${colWidths.value.perm}px`)
 
@@ -241,7 +360,7 @@ const onMouseUp = () => {
   nextTick(() => {})
 }
 
-// ================== 排序（后端存储） ==================
+// ========== 排序 ==========
 type SortField = 'name' | 'size' | 'modifyTime'
 const sortField = ref<SortField>('name')
 const sortOrder = ref<'asc' | 'desc'>('asc')
@@ -271,7 +390,7 @@ const sortedFiles = computed(() => {
   return list
 })
 
-// ================== 右键菜单与权限 ==================
+// ========== 右键菜单与权限 ==========
 const contextMenuVisible = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
@@ -280,7 +399,7 @@ const chmodDialogVisible = ref(false)
 const chmodValue = ref('755')
 const chmodChecks = ref<string[]>([])
 
-// ================== 拖拽上传相关 ==================
+// ========== 拖拽上传 ==========
 const dragOverFolder = ref<any>(null)
 
 const confirmOverwriteVisible = ref(false)
@@ -290,7 +409,6 @@ const overwriteAction = ref<'overwrite' | 'skip' | 'cancel'>('overwrite')
 const alwaysSameAction = ref(false)
 let resolveOverwrite: ((action: 'overwrite' | 'skip' | 'cancel') => void) | null = null
 
-// 覆盖偏好（后端存储）
 const overwritePreferences = ref<Record<string, 'overwrite' | 'skip'>>({})
 
 const loadOverwritePrefs = async () => {
@@ -353,7 +471,7 @@ const doUpload = async (file: File, targetDir: string): Promise<boolean> => {
       const transfer = transfers.value.find(t => t.id === transferId)
       if (transfer) { transfer.progress = 100; transfer.status = 'success' }
       ElMessage.success(`上传成功: ${file.name}`)
-      if (targetDir === currentPath.value) loadFileList()
+      if (targetDir === currentPath.value) refreshFileList()
       return true
     } else throw new Error(result.error)
   } catch (err) {
@@ -399,7 +517,7 @@ const onDrop = async (e: DragEvent) => {
     await uploadFileToPath(droppedFiles[i], targetPath)
   }
   dragOverFolder.value = null
-  if (targetPath === currentPath.value) loadFileList()
+  if (targetPath === currentPath.value) refreshFileList()
 }
 
 const uploadFile = () => {
@@ -412,12 +530,12 @@ const uploadFile = () => {
     if (!files) return
     ElMessage.info(`开始上传 ${files.length} 个文件到当前目录`)
     for (const file of files) await uploadFileToPath(file, currentPath.value)
-    loadFileList()
+    refreshFileList()
   }
   input.click()
 }
 
-// ================== 新建文件 ==================
+// ========== 新建文件 ==========
 const createFile = async () => {
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
   try {
@@ -437,14 +555,14 @@ const createFile = async () => {
     const result = await response.json()
     if (result.success) {
       ElMessage.success(`文件 ${fileName} 创建成功`)
-      loadFileList()
+      refreshFileList()
     } else {
       ElMessage.error(`创建失败: ${result.error}`)
     }
   } catch (err) { if (err !== 'cancel') ElMessage.error('创建文件失败') }
 }
 
-// ================== 编辑文件 ==================
+// ========== 编辑文件 ==========
 const editDialogVisible = ref(false)
 const editContent = ref('')
 const editingFilePath = ref('')
@@ -480,7 +598,7 @@ const saveFileContent = async () => {
     if (result.success) {
       ElMessage.success('保存成功')
       editDialogVisible.value = false
-      loadFileList()
+      refreshFileList()
     } else {
       throw new Error(result.error)
     }
@@ -494,7 +612,7 @@ const closeEditor = () => {
   editingFilePath.value = ''
 }
 
-// ================== 重命名 ==================
+// ========== 重命名 ==========
 const renameDialogVisible = ref(false)
 const newName = ref('')
 const renameTarget = ref<any>(null)
@@ -534,44 +652,7 @@ const confirmRename = async () => {
   }
 }
 
-// ================== 原有功能（文件列表、导航、下载等） ==================
-const currentPathParts = computed(() => {
-  const parts = currentPath.value.split('/').filter(p => p)
-  return ['root', ...parts]
-})
-const navigateToPath = (index: number) => {
-  if (index === 0) currentPath.value = '/'
-  else {
-    const parts = currentPathParts.value.slice(1, index + 1)
-    currentPath.value = '/' + parts.join('/')
-  }
-  loadFileList()
-}
-const copyPath = () => {
-  navigator.clipboard.writeText(currentPath.value === '/' ? '/' : currentPath.value)
-  ElMessage.success('路径已复制')
-}
-
-
-const goToPath = async () => {
-  const { value: inputPath } = await ElMessageBox.prompt('请输入服务器路径（绝对路径）', '跳转到路径', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    inputValue: currentPath.value,
-    inputPattern: /^\//,
-    inputErrorMessage: '路径必须以 / 开头'
-  })
-  if (inputPath) {
-    // 规范化路径：去除末尾多余的斜杠，但保留根目录
-    let newPath = inputPath.trim()
-    if (newPath !== '/' && newPath.endsWith('/')) {
-      newPath = newPath.slice(0, -1)
-    }
-    currentPath.value = newPath
-    loadFileList()
-  }
-}
-
+// ========== 文件列表操作 ==========
 const formatPermissions = (file: any): string => {
   let mode = file.permissions, numericMode = typeof mode === 'string' ? parseInt(mode, 8) : mode
   if (isNaN(numericMode)) numericMode = 0
@@ -595,18 +676,18 @@ const formatSize = (bytes: number) => {
 }
 const formatTime = (ts: number) => ts ? new Date(ts).toLocaleString() : '-'
 
-const loadFileList = () => {
+const refreshFileList = () => {
   if (!props.sshReady || !props.ws || props.ws.readyState !== WebSocket.OPEN) return
   props.ws.send(JSON.stringify({ type: 'sftp-list', sessionId: props.sessionId, path: currentPath.value }))
 }
-const refreshFileList = () => loadFileList()
 
 const handleRowClick = (event: MouseEvent, file: any) => { selectedFile.value = file }
-const handleNameClick = (file: any) => {
+
+const handleNameClick = async (file: any) => {
   if (file.type === 'directory') {
     selectedFile.value = file
-    currentPath.value = currentPath.value === '/' ? `/${file.name}` : `${currentPath.value}/${file.name}`
-    loadFileList()
+    const newPath = currentPath.value === '/' ? `/${file.name}` : `${currentPath.value}/${file.name}`
+    await navigateToSafePath(newPath)
   } else {
     selectedFile.value = file
   }
@@ -732,33 +813,55 @@ const confirmChmod = async () => {
   }
 }
 
-// WebSocket 消息处理
+// ========== WebSocket 消息处理（支持请求 ID） ==========
 const handleWebSocketMessage = (event: MessageEvent) => {
   const message = JSON.parse(event.data)
   if (message.sessionId !== props.sessionId) return
-  switch (message.type) {
+  const { type, requestId, success, files: fileList, error } = message
+
+  // 处理带 requestId 的列表响应
+  if (type === 'sftp-list-response' && requestId && pendingRequests.has(requestId)) {
+    const { resolve, reject } = pendingRequests.get(requestId)!
+    pendingRequests.delete(requestId)
+    if (success) {
+      resolve({ success: true, files: fileList })
+    } else {
+      reject(new Error(error || '目录访问失败'))
+    }
+    return
+  }
+
+  // 其他消息处理
+  switch (type) {
     case 'sftp-list-response':
-      if (message.success) files.value = message.files
-      else ElMessage.error('加载文件列表失败: ' + message.error)
+      if (success) {
+        files.value = fileList
+      } else {
+        let errorMsg = error
+        if (error && (error.includes('Channel open failure') || error.includes('无法打开 SFTP 通道'))) {
+          errorMsg = 'SFTP 通道打开失败。可能原因：SSH 服务器限制了并发会话数（MaxSessions=1）。请尝试修改服务器配置（如 /etc/ssh/sshd_config 中增加 MaxSessions 2），或使用其他 SSH 客户端单独连接。'
+        }
+        ElMessage.error('加载文件列表失败: ' + errorMsg)
+      }
       break
     case 'sftp-delete-response':
-      if (message.success) { ElMessage.success('删除成功'); loadFileList() }
+      if (success) { ElMessage.success('删除成功'); refreshFileList() }
       else ElMessage.error('删除失败')
       break
     case 'sftp-mkdir-response':
-      if (message.success) { ElMessage.success('创建成功'); loadFileList() }
+      if (success) { ElMessage.success('创建成功'); refreshFileList() }
       else ElMessage.error('创建失败')
       break
     case 'sftp-chmod-response':
-      if (message.success) { ElMessage.success('权限修改成功'); loadFileList() }
-      else ElMessage.error('权限修改失败: ' + (message.error || '未知错误'))
+      if (success) { ElMessage.success('权限修改成功'); refreshFileList() }
+      else ElMessage.error('权限修改失败: ' + (error || '未知错误'))
       break
     case 'sftp-rename-response':
-      if (message.success) {
+      if (success) {
         ElMessage.success('重命名成功')
-        loadFileList()
+        refreshFileList()
       } else {
-        ElMessage.error('重命名失败: ' + (message.error || '未知错误'))
+        ElMessage.error('重命名失败: ' + (error || '未知错误'))
       }
       break
   }
@@ -768,13 +871,14 @@ watch(() => props.ws, (newWs, oldWs) => {
   if (oldWs && messageHandler) oldWs.removeEventListener('message', messageHandler)
   if (newWs) { messageHandler = handleWebSocketMessage; newWs.addEventListener('message', messageHandler) }
 }, { immediate: true })
-watch(() => props.sshReady, (ready) => { if (ready && props.ws) loadFileList() })
+
+watch(() => props.sshReady, (ready) => { if (ready && props.ws) refreshFileList() })
 
 onMounted(async () => {
   await loadColWidths()
   await loadSortState()
   await loadOverwritePrefs()
-  if (props.sshReady && props.ws) loadFileList()
+  if (props.sshReady && props.ws) refreshFileList()
   document.addEventListener('click', closeContextMenu)
 })
 onUnmounted(() => {
@@ -784,7 +888,34 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 核心样式 - 已适配暗色主题变量 */
+/* 自定义面包屑样式 */
+.custom-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.breadcrumb-item {
+  cursor: pointer;
+}
+.breadcrumb-link:hover {
+  color: var(--el-color-primary);
+  text-decoration: underline;
+}
+.breadcrumb-separator {
+  margin: 0 4px;
+  color: var(--el-text-color-secondary);
+}
+
+/* 文件夹图标颜色 */
+.clickable-icon.folder-icon {
+  color: #e6a23c !important;
+}
+.file-item .folder-icon {
+  color: #e6a23c;
+}
+
+/* 原有其他样式 */
 .code-editor {
   width: 100%;
   padding: 10px;
@@ -831,16 +962,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.path-breadcrumb {
-  flex: 1;
-}
-.breadcrumb-link {
-  cursor: pointer;
-}
-.breadcrumb-link:hover {
-  color: var(--el-color-primary);
-  text-decoration: underline;
 }
 .file-list-wrapper {
   flex: 1;
@@ -902,8 +1023,11 @@ onUnmounted(() => {
 .file-item.is-folder .clickable-name {
   font-weight: 600;
 }
-.file-item.is-folder .clickable-icon {
-  color: var(--el-color-primary);
+.parent-dir {
+  opacity: 0.8;
+}
+.parent-dir:hover {
+  background: var(--el-fill-color-light);
 }
 .col-name.drag-over-folder {
   background-color: var(--el-color-primary-light-7) !important;

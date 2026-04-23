@@ -184,10 +184,14 @@ wss.on('connection', (ws, req) => {
           break;
         case 'sftp-list':
           if (sessionId && sessions.has(sessionId)) {
-            const files = await sshManager.handleSFTPList(sessionId, payload.path);
-            ws.send(JSON.stringify({ type: 'sftp-list-response', sessionId, files, success: true }));
+            const { path, requestId } = payload;
+            sshManager.handleSFTPList(sessionId, path).then(files => {
+              ws.send(JSON.stringify({ type: 'sftp-list-response', sessionId, requestId, files, success: true }));
+            }).catch(err => {
+              ws.send(JSON.stringify({ type: 'sftp-list-response', sessionId, requestId, success: false, error: err.message }));
+            });
           } else {
-            ws.send(JSON.stringify({ type: 'sftp-list-response', sessionId, success: false, error: '会话不存在' }));
+            ws.send(JSON.stringify({ type: 'sftp-list-response', sessionId, requestId, success: false, error: '会话不存在' }));
           }
           break;
         case 'sftp-delete':

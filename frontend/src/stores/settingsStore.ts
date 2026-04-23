@@ -12,7 +12,8 @@ const DEFAULT_SETTINGS = {
     defaultLocalPath: '',
     concurrentUploads: 3,
     confirmDelete: true,
-    rightClickPaste: false
+    rightClickPaste: false,
+    encoding: 'utf8'   // 新增
 }
 
 export const useSettingsStore = defineStore('settings', () => {

@@ -401,6 +401,16 @@ onMounted(async () => {
   flex-direction: column;
   overflow: hidden;
 }
+.sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: var(--el-border-color);
+  border-radius: 4px;
+}
 .tabs-header {
   display: flex;
   justify-content: space-between;

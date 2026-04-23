@@ -8,6 +8,7 @@
         <span>{{ connection.name }} ({{ connection.host }}:{{ connection.port }})</span>
       </div>
       <div class="toolbar-actions">
+        <el-button size="small" :icon="FullScreen" @click="toggleFullscreen" title="全屏" />
         <el-button size="small" @click="reconnect" :disabled="connected || isConnecting" :icon="RefreshRight">
           重新连接
         </el-button>
@@ -36,11 +37,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
-import { Close, RefreshRight } from '@element-plus/icons-vue'
+import { Close, RefreshRight, FullScreen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import SFTPManager from './SFTPManager.vue'
 import { getConfig } from '../api/config'
@@ -61,7 +62,7 @@ const activeTab = ref('terminal')
 const isConnecting = ref(false)
 let copyTimeout: number | null = null
 
-// 直接从后端获取最新设置（绕过 store 的 undefined 问题）
+// 获取终端设置
 const fetchSettings = async () => {
   try {
     const config = await getConfig()
@@ -84,31 +85,27 @@ const fetchSettings = async () => {
   }
 }
 
+// 右键粘贴处理
 let currentContextMenuHandler: ((e: MouseEvent) => void) | null = null
-// 绑定右键菜单
 const bindContextMenu = (enable: boolean) => {
   const container = terminalRef.value
   if (!container) return
-  // 移除旧监听
   if (currentContextMenuHandler) {
     container.removeEventListener('contextmenu', currentContextMenuHandler)
     currentContextMenuHandler = null
   }
   if (!enable) return
-  // 新监听
+  // 修正后的 handler
   const handler = async (e: MouseEvent) => {
     e.preventDefault()
     try {
       const text = await navigator.clipboard.readText()
-      if (text && terminal) {
-        terminal.write(text)
-        if (ws.value && ws.value.readyState === WebSocket.OPEN) {
-          ws.value.send(JSON.stringify({
-            type: 'ssh-data',
-            sessionId: props.sessionId,
-            data: text
-          }))
-        }
+      if (text && ws.value && ws.value.readyState === WebSocket.OPEN) {
+        ws.value.send(JSON.stringify({
+          type: 'ssh-data',
+          sessionId: props.sessionId,
+          data: text
+        }))
       }
     } catch (err) {
       console.warn('读取剪贴板失败', err)
@@ -119,81 +116,71 @@ const bindContextMenu = (enable: boolean) => {
   currentContextMenuHandler = handler
 }
 
-// 应用终端设置（异步获取最新配置）
-const applyTerminalSettings = async () => {
-  if (!terminal) {
-    console.warn('terminal 未初始化，跳过应用设置')
-    return
+// 调整终端尺寸并通知后端
+const resizeTerminal = () => {
+  if (!fitAddon || !terminal || activeTab.value !== 'terminal') return
+  fitAddon.fit()
+  const { cols, rows } = terminal
+  if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+    ws.value.send(JSON.stringify({
+      type: 'ssh-resize',
+      sessionId: props.sessionId,
+      cols: cols,
+      rows: rows
+    }))
   }
+}
 
+// 应用终端主题和字体
+const applyTerminalSettings = async () => {
+  if (!terminal) return
   const settings = await fetchSettings()
   const { fontSize, fontFamily, backgroundColor, foregroundColor } = settings
 
-  console.log('应用终端设置:', { fontSize, fontFamily, backgroundColor, foregroundColor })
+  terminal.options.fontSize = fontSize
+  terminal.options.fontFamily = fontFamily
+  terminal.options.theme = {
+    background: backgroundColor,
+    foreground: foregroundColor,
+    cursor: '#aeafad'
+  }
 
+  // 强制刷新渲染
   try {
-    // 1. 更新字体选项
-    terminal.options.fontSize = fontSize
-    terminal.options.fontFamily = fontFamily
-
-    // 2. 更新主题
-    terminal.options.theme = {
-      background: backgroundColor,
-      foreground: foregroundColor,
-      cursor: '#aeafad'
-    }
-
-    // 3. 强制内部渲染器刷新（访问内部 API）
     // @ts-ignore
     const core = terminal._core
     if (core && core._renderService && core._renderService._renderer) {
       const renderer = core._renderService._renderer
-      if (typeof renderer.onThemeChange === 'function') {
-        renderer.onThemeChange()
-      }
-      if (typeof renderer.renderRows === 'function') {
-        renderer.renderRows(0, terminal.rows - 1)
-      }
+      if (typeof renderer.onThemeChange === 'function') renderer.onThemeChange()
+      if (typeof renderer.renderRows === 'function') renderer.renderRows(0, terminal.rows - 1)
     }
+    if (typeof terminal.refresh === 'function') terminal.refresh(0, terminal.rows - 1)
+  } catch (e) { /* 忽略内部 API 错误 */ }
 
-    // 4. 重新适应容器大小
-    if (fitAddon) {
-      fitAddon.fit()
-    }
-
-    // 5. 公开 API 强制刷新
-    if (typeof terminal.refresh === 'function') {
-      terminal.refresh(0, terminal.rows - 1)
-    }
-
-    // 6. 直接修改 DOM 元素背景（兜底）
-    const xtermElement = document.querySelector('.xterm')
-    if (xtermElement) {
-      (xtermElement as HTMLElement).style.backgroundColor = backgroundColor
-    }
-    const xtermViewport = document.querySelector('.xterm-viewport')
-    if (xtermViewport) {
-      (xtermViewport as HTMLElement).style.backgroundColor = backgroundColor
-    }
-    const xtermScreen = document.querySelector('.xterm-screen')
-    if (xtermScreen) {
-      (xtermScreen as HTMLElement).style.backgroundColor = backgroundColor
-    }
-
-    // 7. 写入并删除一个空格强制重绘
-    terminal.write(' ')
-    setTimeout(() => {
-      terminal.write('\b \b')
-    }, 10)
-
-    console.log('终端设置已应用')
-  } catch (err) {
-    console.warn('应用终端设置失败', err)
-  }
+  // 重新调整尺寸
+  resizeTerminal()
   bindContextMenu(settings.rightClickPaste === true)
 }
 
-// 初始化终端（异步获取配置）
+// 全屏功能
+const toggleFullscreen = () => {
+  const elem = document.documentElement
+  if (!document.fullscreenElement) {
+    elem.requestFullscreen().then(() => {
+      // 全屏后延迟重新调整终端尺寸
+      setTimeout(resizeTerminal, 100)
+    }).catch(err => {
+      console.warn('全屏失败', err)
+      ElMessage.warning('全屏失败，请检查浏览器权限')
+    })
+  } else {
+    document.exitFullscreen().then(() => {
+      setTimeout(resizeTerminal, 100)
+    })
+  }
+}
+
+// 初始化终端
 const initTerminal = async () => {
   const settings = await fetchSettings()
   terminal = new Terminal({
@@ -215,6 +202,7 @@ const initTerminal = async () => {
   fitAddon.fit()
   terminal.focus()
 
+  // 选中即复制
   terminal.onSelectionChange(() => {
     if (!terminal) return
     const selectedText = terminal.getSelection()
@@ -271,8 +259,12 @@ const connectSSH = () => {
   const wsUrl = `${wsProtocol}//${window.location.host}/ws`
 
   ws.value = new WebSocket(wsUrl)
-
-  ws.value.onopen = () => {
+  const fetchEncoding = async () => {
+    const config = await getConfig()
+    return config?.appSettings?.encoding || 'utf8'
+  }
+  ws.value.onopen = async () => {
+    const encoding = await fetchEncoding()
     ws.value?.send(JSON.stringify({
       type: 'ssh-connect',
       sessionId: props.sessionId,
@@ -280,7 +272,8 @@ const connectSSH = () => {
       port: props.connection.port,
       username: props.connection.username,
       password: props.connection.authType === 'password' ? props.connection.password : undefined,
-      privateKey: props.connection.authType === 'key' ? props.connection.privateKey : undefined
+      privateKey: props.connection.authType === 'key' ? props.connection.privateKey : undefined,
+      encoding: encoding   // 新增
     }))
   }
 
@@ -291,8 +284,12 @@ const connectSSH = () => {
         connected.value = true
         isConnecting.value = false
         ElMessage.success('SSH连接成功')
-        applyTerminalSettings()
-        if (terminal && activeTab.value === 'terminal') terminal.focus()
+        // 关键：连接成功后立刻调整终端尺寸并刷新
+        nextTick(() => {
+          applyTerminalSettings()
+          resizeTerminal()
+          if (terminal && activeTab.value === 'terminal') terminal.focus()
+        })
         break
       case 'ssh-data':
         if (terminal) terminal.write(message.data)
@@ -326,7 +323,7 @@ const connectSSH = () => {
 
 const handleResize = () => {
   if (fitAddon && activeTab.value === 'terminal' && terminalRef.value) {
-    fitAddon.fit()
+    resizeTerminal()
     terminal?.focus()
   }
 }
@@ -339,11 +336,11 @@ const reconnect = async () => {
   connectSSH()
 }
 
-// 监听设置变化（通过全局事件）
 const onSettingsUpdated = async () => {
   console.log('收到 settings-updated 事件，重新获取设置')
   if (terminal) {
     await applyTerminalSettings()
+    resizeTerminal()
   }
 }
 
@@ -352,6 +349,8 @@ onMounted(async () => {
   connectSSH()
   window.addEventListener('resize', handleResize)
   window.addEventListener('settings-updated', onSettingsUpdated)
+  // 监听全屏变化事件
+  document.addEventListener('fullscreenchange', handleResize)
 })
 
 onUnmounted(() => {
@@ -365,17 +364,16 @@ onUnmounted(() => {
   if (terminal) terminal.dispose()
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('settings-updated', onSettingsUpdated)
+  document.removeEventListener('fullscreenchange', handleResize)
   if (copyTimeout) clearTimeout(copyTimeout)
 })
 
 watch(activeTab, (newVal) => {
   if (newVal === 'terminal') {
-    setTimeout(() => {
-      if (fitAddon) {
-        fitAddon.fit()
-        terminal?.focus()
-      }
-    }, 100)
+    nextTick(() => {
+      resizeTerminal()
+      terminal?.focus()
+    })
   }
 })
 </script>
@@ -413,7 +411,7 @@ watch(activeTab, (newVal) => {
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
-  padding-left: 12px;
+  padding-left: 0;
 }
 .inner-tabs :deep(.el-tabs__header) {
   flex-shrink: 0;
@@ -431,6 +429,9 @@ watch(activeTab, (newVal) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+.inner-tabs :deep(.el-tabs__item) {
+  padding: 0 20px !important;
 }
 .terminal-container {
   height: 100%;

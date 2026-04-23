@@ -28,6 +28,15 @@
           <el-form-item label="右键粘贴">
             <el-switch v-model="localSettings.rightClickPaste" style="width: 140px;" />
           </el-form-item>
+          <!-- Settings.vue 模板部分，在“右键粘贴”下方添加 -->
+          <el-form-item label="终端编码">
+            <el-select v-model="localSettings.encoding" style="width: 160px;">
+              <el-option label="UTF-8" value="utf8" />
+              <el-option label="GBK" value="gbk" />
+              <el-option label="GB2312" value="gb2312" />
+            </el-select>
+            <div class="form-tip">影响终端显示和历史命令乱码，请根据服务器实际编码选择</div>
+          </el-form-item>
           <el-form-item>
             <el-button type="default" @click="resetToDefault">还原默认</el-button>
           </el-form-item>
@@ -102,7 +111,8 @@ const loadLocalSettings = async () => {
     fontFamily: appSettings.fontFamily ?? 'Consolas',
     backgroundColor: appSettings.backgroundColor ?? '#1e1e1e',
     foregroundColor: appSettings.foregroundColor ?? '#d4d4d4',
-    rightClickPaste: appSettings.rightClickPaste ?? false
+    rightClickPaste: appSettings.rightClickPaste ?? false,
+    encoding: appSettings.encoding ?? 'utf8'   // 新增
   })
   // 同时更新 store（可选）
   settingsStore.appSettings.value = { ...settingsStore.appSettings.value, ...appSettings }
@@ -123,7 +133,8 @@ const saveAllSettings = async () => {
     fontFamily: localSettings.fontFamily,
     backgroundColor: localSettings.backgroundColor,
     foregroundColor: localSettings.foregroundColor,
-    rightClickPaste: localSettings.rightClickPaste
+    rightClickPaste: localSettings.rightClickPaste,
+    encoding: localSettings.encoding   // 新增
   }
   await settingsStore.saveSettings(settingsToSave)
   window.dispatchEvent(new CustomEvent('settings-updated'))
