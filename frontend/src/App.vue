@@ -560,4 +560,13 @@ onMounted(async () => {
 .dark-theme .tabs .tab .close-tab:hover {
   color: #ffffff;
 }
+.dark-theme .path-bar,
+.dark-theme .panel-header {
+  background-color: #1e1e1e;
+  color: #f0f0f0;
+}
+.dark-theme .breadcrumb-link,
+.dark-theme .breadcrumb-separator {
+  color: #d4d4d4;
+}
 </style>

@@ -1,22 +1,22 @@
 <template>
   <div class="sftp-container" @dragenter="onDragEnter" @dragover="onDragOver" @drop="onDrop">
     <div class="sftp-toolbar">
-      <el-button size="small" type="primary" @click="uploadFile" :disabled="!sshReady">
+      <el-button size="small" type="primary" @click="uploadFile" :disabled="!sshReady || currentPath === null">
         <el-icon><Upload /></el-icon> 上传
       </el-button>
       <el-button size="small" @click="downloadSelectedFile" :disabled="!sshReady || !selectedFile">
         <el-icon><Download /></el-icon> 下载
       </el-button>
-      <el-button size="small" @click="createFile" :disabled="!sshReady">
+      <el-button size="small" @click="createFile" :disabled="!sshReady || currentPath === null">
         <el-icon><Document /></el-icon> 新建文件
       </el-button>
-      <el-button size="small" @click="createFolder" :disabled="!sshReady">
+      <el-button size="small" @click="createFolder" :disabled="!sshReady || currentPath === null">
         <el-icon><FolderAdd /></el-icon> 新建文件夹
       </el-button>
       <el-button size="small" @click="deleteFile" :disabled="!sshReady || !selectedFile">
         <el-icon><Delete /></el-icon> 删除
       </el-button>
-      <el-button size="small" @click="refreshFileList" :disabled="!sshReady">
+      <el-button size="small" @click="refreshFileList" :disabled="!sshReady || currentPath === null">
         <el-icon><Refresh /></el-icon> 刷新
       </el-button>
       <el-input v-model="searchText" placeholder="搜索当前目录文件" size="small" style="width: 200px;" clearable />
@@ -26,10 +26,9 @@
       <div class="remote-panel">
         <div class="panel-header">
           <div class="path-bar">
-            <!-- 自定义面包屑：根目录显示 / -->
-            <div class="custom-breadcrumb">
+            <!-- 自定义面包屑：根目录显示 /，加载中或未获取路径时显示提示 -->
+            <div class="custom-breadcrumb" v-if="currentPath !== null">
               <span class="breadcrumb-item" @click="navigateToPath(0)">
-
               </span>
               <template v-for="(part, idx) in currentPathParts" :key="idx">
                 <span class="breadcrumb-separator">/</span>
@@ -38,11 +37,17 @@
                 </span>
               </template>
             </div>
-            <el-button size="small" :icon="DArrowRight" @click="goToPathSafe" title="跳转到路径" />
-            <el-button size="small" :icon="CopyDocument" @click="copyPath" title="复制完整路径" />
+            <div v-else class="path-loading">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <span>正在获取当前目录...</span>
+            </div>
+            <el-button size="small" :icon="DArrowRight" @click="goToPathSafe" title="跳转到路径" :disabled="currentPath === null" />
+            <el-button size="small" :icon="CopyDocument" @click="copyPath" title="复制完整路径" :disabled="currentPath === null" />
           </div>
         </div>
-        <div class="file-list-wrapper">
+
+        <!-- 文件列表区域：仅在路径获取成功后才显示 -->
+        <div class="file-list-wrapper" v-if="currentPath !== null">
           <div class="file-list-header" :style="{ gridTemplateColumns: gridTemplateCols }">
             <div class="col-name sortable" @click="handleSort('name')">
               名称
@@ -113,6 +118,12 @@
               <el-empty description="目录为空" />
             </div>
           </div>
+        </div>
+
+        <!-- 未获取到路径时的加载状态 -->
+        <div v-else class="loading-container">
+          <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+          <p>正在同步工作目录...</p>
         </div>
       </div>
     </div>
@@ -201,7 +212,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { Upload, Download, FolderAdd, Delete, Refresh, Folder, Document, CopyDocument, DArrowRight } from '@element-plus/icons-vue'
+import { Upload, Download, FolderAdd, Delete, Refresh, Folder, Document, CopyDocument, DArrowRight, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getConfig, saveConfigKey } from '../api/config'
 
@@ -212,7 +223,7 @@ const props = defineProps<{
   sshReady: boolean
 }>()
 
-const currentPath = ref('/')
+const currentPath = ref<string | null>(null)  // 初始为 null，等待同步
 const files = ref<any[]>([])
 const selectedFile = ref<any>(null)
 const searchText = ref('')
@@ -221,13 +232,13 @@ let messageHandler: ((event: MessageEvent) => void) | null = null
 const isNavigating = ref(false)
 
 // ========== 自定义面包屑 ==========
-// 返回路径部分数组（不含根目录）
 const currentPathParts = computed(() => {
+  if (currentPath.value === null) return []
   return currentPath.value.split('/').filter(p => p)
 })
 
-// 根据索引获取完整路径（0 表示根目录）
 const getPathFromIndex = (idx: number) => {
+  if (currentPath.value === null) return '/'
   if (idx === 0) return '/'
   const parts = currentPathParts.value.slice(0, idx)
   return '/' + parts.join('/')
@@ -237,7 +248,6 @@ const getPathFromIndex = (idx: number) => {
 let sftpRequestId = 0
 const pendingRequests = new Map<number, { resolve: Function; reject: Function }>()
 
-// 安全导航函数（验证目录可访问后再跳转）
 const navigateToSafePath = async (targetPath: string): Promise<boolean> => {
   if (!props.sshReady || !props.ws || props.ws.readyState !== WebSocket.OPEN) {
     ElMessage.warning('SSH 连接未就绪')
@@ -283,20 +293,19 @@ const navigateToSafePath = async (targetPath: string): Promise<boolean> => {
   })
 }
 
-// 面包屑点击导航
 const navigateToPath = async (idx: number) => {
+  if (currentPath.value === null) return
   await navigateToSafePath(getPathFromIndex(idx))
 }
 
-// 返回上级目录
 const goUpDirectory = async () => {
-  if (currentPath.value === '/') return
+  if (currentPath.value === null || currentPath.value === '/') return
   const parentPath = currentPath.value.substring(0, currentPath.value.lastIndexOf('/')) || '/'
   await navigateToSafePath(parentPath)
 }
 
-// 跳转路径对话框（安全）
 const goToPathSafe = async () => {
+  if (currentPath.value === null) return
   const { value: inputPath } = await ElMessageBox.prompt('请输入服务器路径（绝对路径）', '跳转到路径', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
@@ -313,8 +322,8 @@ const goToPathSafe = async () => {
   }
 }
 
-// 复制路径
 const copyPath = () => {
+  if (currentPath.value === null) return
   navigator.clipboard.writeText(currentPath.value === '/' ? '/' : currentPath.value)
   ElMessage.success('路径已复制')
 }
@@ -483,6 +492,7 @@ const doUpload = async (file: File, targetDir: string): Promise<boolean> => {
 }
 
 const uploadFileToPath = async (file: File, targetDir: string): Promise<boolean> => {
+  if (currentPath.value === null) return false
   const targetFilePath = targetDir === '/' ? `/${file.name}` : `${targetDir}/${file.name}`
   const exists = await checkFileExists(targetFilePath)
   if (exists) {
@@ -508,6 +518,7 @@ const onDragEnd = () => { dragOverFolder.value = null }
 
 const onDrop = async (e: DragEvent) => {
   e.preventDefault()
+  if (currentPath.value === null) return
   const targetFolder = dragOverFolder.value
   const targetPath = targetFolder ? (currentPath.value === '/' ? `/${targetFolder.name}` : `${currentPath.value}/${targetFolder.name}`) : currentPath.value
   const droppedFiles = e.dataTransfer?.files
@@ -522,6 +533,7 @@ const onDrop = async (e: DragEvent) => {
 
 const uploadFile = () => {
   if (!props.sshReady) { ElMessage.warning('请等待 SSH 连接就绪'); return }
+  if (currentPath.value === null) { ElMessage.warning('目录尚未同步'); return }
   const input = document.createElement('input')
   input.type = 'file'
   input.multiple = true
@@ -529,7 +541,7 @@ const uploadFile = () => {
     const files = e.target.files
     if (!files) return
     ElMessage.info(`开始上传 ${files.length} 个文件到当前目录`)
-    for (const file of files) await uploadFileToPath(file, currentPath.value)
+    for (const file of files) await uploadFileToPath(file, currentPath.value!)
     refreshFileList()
   }
   input.click()
@@ -537,6 +549,7 @@ const uploadFile = () => {
 
 // ========== 新建文件 ==========
 const createFile = async () => {
+  if (currentPath.value === null) return
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
   try {
     const { value: fileName } = await ElMessageBox.prompt('请输入文件名（例如：script.sh）', '新建文件', {
@@ -569,6 +582,7 @@ const editingFilePath = ref('')
 const editorTextarea = ref<HTMLTextAreaElement | null>(null)
 
 const openEditor = async (file: any) => {
+  if (currentPath.value === null) return
   if (file.type === 'directory') { ElMessage.warning('不能编辑文件夹'); return }
   editingFilePath.value = currentPath.value === '/' ? `/${file.name}` : `${currentPath.value}/${file.name}`
   const downloadUrl = `/api/sftp/download?sessionId=${props.sessionId}&filePath=${encodeURIComponent(editingFilePath.value)}`
@@ -584,6 +598,7 @@ const openEditor = async (file: any) => {
 }
 
 const saveFileContent = async () => {
+  if (currentPath.value === null) return
   const blob = new Blob([editContent.value], { type: 'text/plain;charset=utf-8' })
   const fileName = editingFilePath.value.split('/').pop() || 'file'
   const file = new File([blob], fileName, { type: 'text/plain' })
@@ -626,6 +641,7 @@ const renameContextFile = () => {
 }
 
 const confirmRename = async () => {
+  if (currentPath.value === null) return
   if (!renameTarget.value) return
   const newNameTrim = newName.value.trim()
   if (!newNameTrim) {
@@ -677,7 +693,7 @@ const formatSize = (bytes: number) => {
 const formatTime = (ts: number) => ts ? new Date(ts).toLocaleString() : '-'
 
 const refreshFileList = () => {
-  if (!props.sshReady || !props.ws || props.ws.readyState !== WebSocket.OPEN) return
+  if (!props.sshReady || !props.ws || props.ws.readyState !== WebSocket.OPEN || currentPath.value === null) return
   props.ws.send(JSON.stringify({ type: 'sftp-list', sessionId: props.sessionId, path: currentPath.value }))
 }
 
@@ -686,6 +702,7 @@ const handleRowClick = (event: MouseEvent, file: any) => { selectedFile.value = 
 const handleNameClick = async (file: any) => {
   if (file.type === 'directory') {
     selectedFile.value = file
+    if (currentPath.value === null) return
     const newPath = currentPath.value === '/' ? `/${file.name}` : `${currentPath.value}/${file.name}`
     await navigateToSafePath(newPath)
   } else {
@@ -694,6 +711,7 @@ const handleNameClick = async (file: any) => {
 }
 
 const downloadSelectedFile = async () => {
+  if (currentPath.value === null) return
   if (!selectedFile.value) { ElMessage.warning('请先选中一个文件或文件夹'); return }
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
   const remotePath = currentPath.value === '/' ? `/${selectedFile.value.name}` : `${currentPath.value}/${selectedFile.value.name}`
@@ -730,6 +748,7 @@ const downloadSelectedFile = async () => {
 }
 
 const createFolder = async () => {
+  if (currentPath.value === null) return
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
   try {
     const { value } = await ElMessageBox.prompt('请输入文件夹名称', '新建文件夹', {
@@ -746,6 +765,7 @@ const createFolder = async () => {
 }
 
 const deleteFile = async () => {
+  if (currentPath.value === null) return
   if (!selectedFile.value) { ElMessage.warning('请选择一个文件或文件夹'); return }
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
   try {
@@ -804,6 +824,7 @@ const updateOctalFromChecks = () => {
 }
 watch(chmodChecks, () => updateOctalFromChecks(), { deep: true })
 const confirmChmod = async () => {
+  if (currentPath.value === null) return
   if (!contextMenuFile.value) return
   const remotePath = currentPath.value === '/' ? `/${contextMenuFile.value.name}` : `${currentPath.value}/${contextMenuFile.value.name}`
   if (props.ws && props.ws.readyState === WebSocket.OPEN) {
@@ -813,11 +834,25 @@ const confirmChmod = async () => {
   }
 }
 
-// ========== WebSocket 消息处理（支持请求 ID） ==========
+// ========== WebSocket 消息处理（支持请求 ID 及 sftp-pwd-response） ==========
 const handleWebSocketMessage = (event: MessageEvent) => {
+  if (!props.ws || event.target !== props.ws) return
   const message = JSON.parse(event.data)
   if (message.sessionId !== props.sessionId) return
-  const { type, requestId, success, files: fileList, error } = message
+  const { type, requestId, success, files: fileList, error, path } = message
+
+  // 处理 sftp-pwd-response
+  if (type === 'sftp-pwd-response') {
+    if (success && path) {
+      currentPath.value = path
+      refreshFileList()
+    } else {
+      ElMessage.error('获取当前目录失败: ' + (error || '未知错误'))
+      currentPath.value = '/'  // 降级到根目录
+      refreshFileList()
+    }
+    return
+  }
 
   // 处理带 requestId 的列表响应
   if (type === 'sftp-list-response' && requestId && pendingRequests.has(requestId)) {
@@ -869,18 +904,39 @@ const handleWebSocketMessage = (event: MessageEvent) => {
 
 watch(() => props.ws, (newWs, oldWs) => {
   if (oldWs && messageHandler) oldWs.removeEventListener('message', messageHandler)
-  if (newWs) { messageHandler = handleWebSocketMessage; newWs.addEventListener('message', messageHandler) }
+  if (newWs) {
+    messageHandler = handleWebSocketMessage;
+    newWs.addEventListener('message', messageHandler)
+  }
 }, { immediate: true })
 
-watch(() => props.sshReady, (ready) => { if (ready && props.ws) refreshFileList() })
+// 发送请求获取当前目录
+const fetchCurrentDirectory = () => {
+  if (!props.sshReady || !props.ws || props.ws.readyState !== WebSocket.OPEN) return
+  props.ws.send(JSON.stringify({
+    type: 'sftp-pwd',
+    sessionId: props.sessionId
+  }))
+}
+
+// 当 sshReady 变为 true 且 currentPath 仍为 null 时，请求当前工作目录
+watch(() => props.sshReady, (ready) => {
+  if (ready && currentPath.value === null) {
+    fetchCurrentDirectory()
+  }
+})
 
 onMounted(async () => {
   await loadColWidths()
   await loadSortState()
   await loadOverwritePrefs()
-  if (props.sshReady && props.ws) refreshFileList()
+  // 如果挂载时已就绪，立即请求目录
+  if (props.sshReady && currentPath.value === null) {
+    fetchCurrentDirectory()
+  }
   document.addEventListener('click', closeContextMenu)
 })
+
 onUnmounted(() => {
   if (props.ws && messageHandler) props.ws.removeEventListener('message', messageHandler)
   document.removeEventListener('click', closeContextMenu)
@@ -962,6 +1018,21 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.path-loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+.loading-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-secondary);
 }
 .file-list-wrapper {
   flex: 1;

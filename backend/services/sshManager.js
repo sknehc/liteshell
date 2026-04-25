@@ -149,6 +149,16 @@ class SSHManager {
     });
   }
 
+  async getSFTPPwd(sessionId) {
+    const sftp = await this.getSFTP(sessionId);
+    return new Promise((resolve, reject) => {
+      sftp.realpath('.', (err, absPath) => {
+        if (err) reject(err);
+        else resolve(absPath);
+      });
+    });
+  }
+
   async handleSFTPList(sessionId, path) {
     try {
       const sftp = await this.getSFTP(sessionId);

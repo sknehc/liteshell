@@ -194,6 +194,17 @@ wss.on('connection', (ws, req) => {
             ws.send(JSON.stringify({ type: 'sftp-list-response', sessionId, requestId, success: false, error: '会话不存在' }));
           }
           break;
+        case 'sftp-pwd':
+          if (sessionId && sessions.has(sessionId)) {
+            sshManager.getSFTPPwd(sessionId).then((cwd) => {
+              ws.send(JSON.stringify({ type: 'sftp-pwd-response', sessionId, success: true, path: cwd }));
+            }).catch((err) => {
+              ws.send(JSON.stringify({ type: 'sftp-pwd-response', sessionId, success: false, error: err.message }));
+            });
+          } else {
+            ws.send(JSON.stringify({ type: 'sftp-pwd-response', sessionId, success: false, error: '会话不存在' }));
+          }
+          break;
         case 'sftp-delete':
           if (sessionId && sessions.has(sessionId)) {
             const result = await sshManager.handleSFTPDelete(sessionId, payload.path);
