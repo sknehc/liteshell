@@ -1,27 +1,27 @@
 <template>
   <div class="sftp-container" @dragenter="onDragEnter" @dragover="onDragOver" @drop="onDrop">
     <div class="sftp-toolbar">
-      <el-button size="small" type="primary" @click="uploadFile" :disabled="!sshReady || currentPath === null">
+      <el-button size="min-height" type="primary" @click="uploadFile" :disabled="!sshReady || currentPath === null">
         <el-icon><Upload /></el-icon> 上传
       </el-button>
-      <el-button size="small" @click="downloadSelectedFile" :disabled="!sshReady || !selectedFile">
+      <el-button size="min-height" @click="downloadSelectedFile" :disabled="!sshReady || !selectedFile">
         <el-icon><Download /></el-icon> 下载
       </el-button>
-      <el-button size="small" @click="createFile" :disabled="!sshReady || currentPath === null">
+      <el-button size="min-height" @click="createFile" :disabled="!sshReady || currentPath === null">
         <el-icon><Document /></el-icon> 新建文件
       </el-button>
-      <el-button size="small" @click="createFolder" :disabled="!sshReady || currentPath === null">
+      <el-button size="min-height" @click="createFolder" :disabled="!sshReady || currentPath === null">
         <el-icon><FolderAdd /></el-icon> 新建文件夹
       </el-button>
-      <el-button size="small" @click="deleteFile" :disabled="!sshReady || !selectedFile">
+      <el-button size="min-height" @click="deleteFile" :disabled="!sshReady || !selectedFile">
         <el-icon><Delete /></el-icon> 删除
       </el-button>
-      <el-button size="small" @click="refreshFileList" :disabled="!sshReady || currentPath === null">
+      <el-button size="min-height" @click="refreshFileList" :disabled="!sshReady || currentPath === null">
         <el-icon><Refresh /></el-icon> 刷新
       </el-button>
-      <el-input v-model="searchText" placeholder="搜索当前目录文件" size="small" style="width: 200px;" clearable />
+      <el-input v-model="searchText" placeholder="搜索当前目录文件" size="min-height" style="width: 200px;" clearable />
       <el-button
-          size="small"
+          size="min-height"
           @click="onOpenTerminalClick"
           :disabled="!sshReady || currentPath === null"
           title="在终端中打开当前路径"
@@ -29,18 +29,18 @@
         <el-icon><Monitor /></el-icon>
         终端
       </el-button>
-      <el-checkbox v-model="showHidden" size="small" :disabled="!sshReady" style="margin-left: 8px;">
+      <el-checkbox v-model="showHidden" size="min-height" :disabled="!sshReady" style="margin-left: 8px;">
         显示隐藏文件
       </el-checkbox>
 
       <!-- 收藏按钮 -->
-      <el-button size="small" @click="openFavoriteDialog" :disabled="!sshReady || currentPath === null" style="margin-left: auto; margin-right: 0;">
+      <el-button size="min-height" @click="openFavoriteDialog" :disabled="!sshReady || currentPath === null" style="margin-left: auto; margin-right: 0;">
         <el-icon><Star /></el-icon> 收藏
       </el-button>
 
       <!-- 收藏夹下拉（公用+私有） -->
-      <el-dropdown trigger="click" :disabled="allFavorites.length === 0" style="margin-left: 4px;">
-        <el-button size="small">
+      <el-dropdown ref="favoritesDropdownRef" trigger="click" :disabled="allFavorites.length === 0" style="margin-left: 4px;">
+        <el-button size="min-height">
           收藏夹 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
         </el-button>
         <template #dropdown>
@@ -49,7 +49,7 @@
               <div class="favorite-row">
                 <span class="favorite-name" @click.stop="goToFavoritePath(fav.path)">
                   {{ fav.name }}
-                  <el-tag v-if="fav.isPublic" size="small" type="warning" style="margin-left: 4px;">公用</el-tag>
+                  <el-tag v-if="fav.isPublic" size="min-height" type="warning" style="margin-left: 4px;">公用</el-tag>
                 </span>
                 <span class="favorite-actions">
                   <el-icon class="action-icon" @click.stop="editFavorite(fav)"><Edit /></el-icon>
@@ -72,7 +72,7 @@
             <div class="custom-breadcrumb" v-if="currentPath !== null">
               <span class="breadcrumb-item" @click="navigateToPath(0)">/</span>
               <template v-for="(part, idx) in currentPathParts" :key="idx">
-                <span class="breadcrumb-separator">/</span>
+                <span v-if="idx > 0" class="breadcrumb-item">/</span>
                 <span class="breadcrumb-item" @click="navigateToPath(idx + 1)">
                   <span class="breadcrumb-link">{{ part }}</span>
                 </span>
@@ -82,8 +82,8 @@
               <el-icon class="is-loading"><Loading /></el-icon>
               <span>正在获取当前目录...</span>
             </div>
-            <el-button size="small" :icon="DArrowRight" @click="goToPathSafe" title="跳转到路径" :disabled="currentPath === null" />
-            <el-button size="small" :icon="CopyDocument" @click="copyPath" title="复制完整路径" :disabled="currentPath === null" />
+            <el-button size="min-height" :icon="DArrowRight" @click="goToPathSafe" title="跳转到路径" :disabled="currentPath === null" />
+            <el-button size="min-height" :icon="CopyDocument" @click="copyPath" title="复制完整路径" :disabled="currentPath === null" />
           </div>
         </div>
 
@@ -113,7 +113,7 @@
             <div v-if="currentPath !== '/'" class="file-item" @click="goUpDirectory">
               <div class="col-name">
                 <el-icon><Folder /></el-icon>
-                <span class="clickable-name">..</span>
+                <span class="clickable-name">••</span>
               </div>
             </div>
             <div
@@ -135,7 +135,7 @@
               >
                 <el-icon :class="{ 'folder-icon': file.type === 'directory' }" @click.stop="handleNameClick(file)">
                   <Folder v-if="file.type === 'directory'" />
-                  <Document v-else />
+                  <component :is="getFileIcon(file.name)" v-else />
                 </el-icon>
                 <span @click.stop="handleNameClick(file)" class="clickable-name">{{ file.name }}</span>
               </div>
@@ -168,7 +168,7 @@
     <div class="transfer-panel" v-if="transfers.length > 0">
       <div class="transfer-header">
         <span>传输队列</span>
-        <el-button size="small" text @click="clearTransfers">关闭</el-button>
+        <el-button size="min-height" text @click="clearTransfers">关闭</el-button>
       </div>
       <div v-for="t in transfers" :key="t.id" class="transfer-item">
         <span>{{ t.name }}</span>
@@ -240,7 +240,6 @@
       </template>
     </el-dialog>
 
-    <!-- 收藏编辑对话框 -->
     <el-dialog v-model="favoriteDialogVisible" :title="isEditingFavorite ? '编辑收藏' : '添加收藏'" width="480px" destroy-on-close>
       <el-form :model="favoriteForm" label-width="80px">
         <el-form-item label="名称">
@@ -298,7 +297,6 @@ const showHidden = ref(false)
 let messageHandler: ((event: MessageEvent) => void) | null = null
 const isNavigating = ref(false)
 
-// ========== 自定义面包屑 ==========
 const currentPathParts = computed(() => {
   if (currentPath.value === null) return []
   return currentPath.value.split('/').filter(p => p)
@@ -311,7 +309,6 @@ const getPathFromIndex = (idx: number) => {
   return '/' + parts.join('/')
 }
 
-// ========== 请求 ID 管理（用于安全导航） ==========
 let sftpRequestId = 0
 const pendingRequests = new Map<number, { resolve: Function; reject: Function }>()
 
@@ -395,7 +392,6 @@ const copyPath = () => {
   ElMessage.success('路径已复制')
 }
 
-// ========== 列宽调整 ==========
 const colWidths = ref({ name: 300, size: 100, time: 160, perm: 180 })
 const gridTemplateCols = computed(() => `${colWidths.value.name}px ${colWidths.value.size}px ${colWidths.value.time}px ${colWidths.value.perm}px`)
 
@@ -436,7 +432,6 @@ const onMouseUp = () => {
   nextTick(() => {})
 }
 
-// ========== 排序 ==========
 type SortField = 'name' | 'size' | 'modifyTime'
 const sortField = ref<SortField>('name')
 const sortOrder = ref<'asc' | 'desc'>('asc')
@@ -469,7 +464,6 @@ const sortedFiles = computed(() => {
   return list
 })
 
-// ========== 右键菜单与权限 ==========
 const contextMenuVisible = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
@@ -478,7 +472,6 @@ const chmodDialogVisible = ref(false)
 const chmodValue = ref('755')
 const chmodChecks = ref<string[]>([])
 
-// ========== 拖拽上传 ==========
 const dragOverFolder = ref<any>(null)
 
 const confirmOverwriteVisible = ref(false)
@@ -617,7 +610,6 @@ const uploadFile = () => {
   input.click()
 }
 
-// ========== 新建文件 ==========
 const createFile = async () => {
   if (currentPath.value === null) return
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
@@ -645,7 +637,6 @@ const createFile = async () => {
   } catch (err) { if (err !== 'cancel') ElMessage.error('创建文件失败') }
 }
 
-// ========== 编辑文件 ==========
 const editDialogVisible = ref(false)
 const editContent = ref('')
 const editingFilePath = ref('')
@@ -697,7 +688,6 @@ const closeEditor = () => {
   editingFilePath.value = ''
 }
 
-// ========== 重命名 ==========
 const renameDialogVisible = ref(false)
 const newName = ref('')
 const renameTarget = ref<any>(null)
@@ -738,7 +728,6 @@ const confirmRename = async () => {
   }
 }
 
-// ========== 文件列表操作 ==========
 const formatPermissions = (file: any): string => {
   let mode = file.permissions, numericMode = typeof mode === 'string' ? parseInt(mode, 8) : mode
   if (isNaN(numericMode)) numericMode = 0
@@ -904,7 +893,6 @@ const confirmChmod = async () => {
   }
 }
 
-// ========== WebSocket 消息处理 ==========
 const handleWebSocketMessage = (event: MessageEvent) => {
   if (!props.ws || event.target !== props.ws) return
   const message = JSON.parse(event.data)
@@ -997,20 +985,18 @@ const onOpenTerminalClick = () => {
   }
 }
 
-// ========== 收藏功能（支持公用/私有） ==========
+// ========== 收藏功能 ==========
+const favoritesDropdownRef = ref<any>(null)
+
 interface Favorite {
   id: string
   name: string
   path: string
 }
 
-// 私用收藏来自连接
 const privateFavorites = ref<{ id: string; name: string; path: string }[]>([])
-
-// 公用收藏来自全局配置
 const publicFavorites = ref<{ id: string; name: string; path: string }[]>([])
 
-// 合并后的收藏列表
 const allFavorites = computed(() => {
   const priv = privateFavorites.value.map(f => ({ ...f, isPublic: false }))
   const pub = publicFavorites.value.map(f => ({ ...f, isPublic: true }))
@@ -1021,19 +1007,16 @@ const favoriteDialogVisible = ref(false)
 const favoriteForm = ref({
   name: '',
   path: '',
-  isPublic: false  // 默认私用
+  isPublic: false
 })
 const isEditingFavorite = ref(false)
 const editingFavoriteId = ref<string | null>(null)
-// 记录当前编辑的收藏是公用还是私用
 const editingIsPublic = ref(false)
 
-// 加载私用收藏（跟随连接）
 watch(() => props.connection?.favorites, (newVal) => {
   privateFavorites.value = newVal || []
 }, { immediate: true, deep: true })
 
-// 加载公用收藏
 const loadPublicFavorites = async () => {
   try {
     const config = await getConfig()
@@ -1043,19 +1026,17 @@ const loadPublicFavorites = async () => {
   }
 }
 
-// 保存公用收藏
 const savePublicFavorites = async (list: { id: string; name: string; path: string }[]) => {
   await saveConfigKey('sftp_public_favorites', list)
+  window.dispatchEvent(new CustomEvent('public-favorites-updated'))
 }
 
-// 保存私用收藏到连接
 const savePrivateFavorites = async (list: { id: string; name: string; path: string }[]) => {
   await connectionStore.updateConnection(props.connection.id, {
     favorites: list
   })
 }
 
-// 打开添加对话框
 const openFavoriteDialog = () => {
   if (currentPath.value === null) return
   isEditingFavorite.value = false
@@ -1068,7 +1049,6 @@ const openFavoriteDialog = () => {
   favoriteDialogVisible.value = true
 }
 
-// 编辑收藏
 const editFavorite = (fav: Favorite) => {
   isEditingFavorite.value = true
   editingFavoriteId.value = fav.id
@@ -1081,7 +1061,6 @@ const editFavorite = (fav: Favorite) => {
   favoriteDialogVisible.value = true
 }
 
-// 删除收藏
 const deleteFavorite = (fav: Favorite) => {
   ElMessageBox.confirm(`确定删除收藏“${fav.name}”吗？`, '提示', { type: 'warning' })
       .then(async () => {
@@ -1099,7 +1078,6 @@ const deleteFavorite = (fav: Favorite) => {
       .catch(() => {})
 }
 
-// 保存（添加或更新）
 const saveFavorite = async () => {
   if (!favoriteForm.value.name.trim() || !favoriteForm.value.path.trim()) {
     ElMessage.warning('名称和路径不能为空')
@@ -1109,10 +1087,8 @@ const saveFavorite = async () => {
   const newIsPublic = favoriteForm.value.isPublic
 
   if (isEditingFavorite.value && editingFavoriteId.value) {
-    // 编辑模式
     const oldIsPublic = editingIsPublic.value
     if (oldIsPublic === newIsPublic) {
-      // 未改变类型，更新原列表
       if (newIsPublic) {
         const updated = publicFavorites.value.map(f =>
             f.id === editingFavoriteId.value ? { id: f.id, name: favoriteForm.value.name, path: favoriteForm.value.path } : f
@@ -1127,7 +1103,6 @@ const saveFavorite = async () => {
         await savePrivateFavorites(updated)
       }
     } else {
-      // 类型改变：从原列表删除，添加到新列表
       const newItem = {
         id: editingFavoriteId.value,
         name: favoriteForm.value.name,
@@ -1150,7 +1125,6 @@ const saveFavorite = async () => {
     }
     ElMessage.success('已更新')
   } else {
-    // 添加模式
     const newItem = {
       id: uuidv4(),
       name: favoriteForm.value.name,
@@ -1168,10 +1142,45 @@ const saveFavorite = async () => {
   favoriteDialogVisible.value = false
 }
 
-// 点击收藏跳转
 const goToFavoritePath = (path: string) => {
   if (currentPath.value === null) return
   navigateToSafePath(path)
+  if (favoritesDropdownRef.value) {
+    (favoritesDropdownRef.value as any).handleClose?.()
+  }
+}
+
+const onPublicFavoritesUpdated = () => {
+  loadPublicFavorites()
+}
+
+// ========== 文件图标映射 ==========
+function getFileIcon(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() || ''
+  // 图片
+  if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico'].includes(ext)) return 'Picture'
+  // 视频
+  if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mpeg'].includes(ext)) return 'VideoCamera'
+  // 音频
+  if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a'].includes(ext)) return 'Headphone'
+  // 压缩包
+  if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'z'].includes(ext)) return 'Collection'
+  // 代码文件
+  if (['js', 'ts', 'jsx', 'tsx', 'vue', 'html', 'htm', 'css', 'scss', 'sass', 'less', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'go', 'rs', 'php', 'rb', 'swift', 'kt', 'sql', 'sh', 'bash', 'zsh', 'ps1', 'bat', 'cmd'].includes(ext)) return 'Code'
+  // 文本文件
+  if (['txt', 'md', 'markdown', 'log', 'ini', 'cfg', 'conf', 'yaml', 'yml', 'json', 'xml', 'csv'].includes(ext)) return 'Edit'
+  // PDF
+  if (ext === 'pdf') return 'Files'
+  // Office
+  if (['doc', 'docx'].includes(ext)) return 'Document'
+  if (['xls', 'xlsx', 'xlsm'].includes(ext)) return 'Grid'
+  if (['ppt', 'pptx'].includes(ext)) return 'Presentation'
+  // 可执行文件
+  if (['exe', 'msi', 'app', 'deb', 'rpm', 'sh', 'bin', 'run'].includes(ext)) return 'Monitor'
+  // 字体
+  if (['ttf', 'otf', 'woff', 'woff2', 'eot'].includes(ext)) return 'Font'
+  // 默认
+  return 'Files'
 }
 
 onMounted(async () => {
@@ -1183,16 +1192,17 @@ onMounted(async () => {
     fetchCurrentDirectory()
   }
   document.addEventListener('click', closeContextMenu)
+  window.addEventListener('public-favorites-updated', onPublicFavoritesUpdated)
 })
 
 onUnmounted(() => {
   if (props.ws && messageHandler) props.ws.removeEventListener('message', messageHandler)
   document.removeEventListener('click', closeContextMenu)
+  window.removeEventListener('public-favorites-updated', onPublicFavoritesUpdated)
 })
 </script>
 
 <style scoped>
-/* 自定义面包屑样式 */
 .custom-breadcrumb {
   display: flex;
   align-items: center;
@@ -1201,25 +1211,21 @@ onUnmounted(() => {
 }
 .breadcrumb-item {
   cursor: pointer;
+  margin: 0 4px;
+  font-weight: bold;
+  color: var(--el-text-color-primary);
+  font-size: 20px;
 }
 .breadcrumb-link:hover {
   color: var(--el-color-primary);
   text-decoration: underline;
 }
-.breadcrumb-separator {
-  margin: 0 4px;
-  color: var(--el-text-color-secondary);
-}
-
-/* 文件夹图标颜色 */
 .clickable-icon.folder-icon {
   color: #e6a23c !important;
 }
 .file-item .folder-icon {
   color: #e6a23c;
 }
-
-/* 原有其他样式 */
 .code-editor {
   width: 100%;
   padding: 10px;
@@ -1273,7 +1279,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: 20px;
 }
 .loading-container {
   flex: 1;
@@ -1292,8 +1298,8 @@ onUnmounted(() => {
 .file-list-header {
   display: grid;
   background: var(--el-fill-color-light);
-  font-weight: 500;
-  font-size: 12px;
+  font-weight: bold;
+  font-size: 18px;
   border-bottom: 1px solid var(--el-border-color);
   position: sticky;
   top: 0;
@@ -1321,7 +1327,7 @@ onUnmounted(() => {
   display: grid;
   cursor: pointer;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  font-size: 13px;
+  font-size: 20px;
   color: var(--el-text-color-primary);
 }
 .file-item > div {
@@ -1338,10 +1344,12 @@ onUnmounted(() => {
   background: var(--el-fill-color-light);
 }
 .file-item.selected {
-  background: var(--el-color-primary-light-9);
+  background: var(--el-color-primary-light-7);
+  border-left: 3px solid var(--el-color-primary);
+  color: var(--el-text-color-primary);
 }
 .file-item.is-folder .clickable-name {
-  font-weight: 600;
+  font-weight: bold;
 }
 .parent-dir {
   opacity: 0.8;
@@ -1403,7 +1411,7 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 8px 12px;
   background: var(--el-fill-color-light);
-  font-size: 13px;
+  font-size: 20px;
 }
 .transfer-item {
   padding: 8px 12px;
@@ -1421,13 +1429,11 @@ onUnmounted(() => {
 .context-menu div {
   padding: 8px 12px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 20px;
 }
 .context-menu div:hover {
   background: var(--el-fill-color-light);
 }
-
-/* 收藏相关样式 */
 .favorite-item {
   padding: 0 !important;
 }
@@ -1465,7 +1471,7 @@ onUnmounted(() => {
   color: var(--el-color-primary);
 }
 .form-tip {
-  font-size: 12px;
+  font-size: 20px;
   color: var(--el-text-color-secondary);
   margin-top: 4px;
 }

@@ -435,7 +435,7 @@ onMounted(async () => {
   padding: 8px 12px;
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  font-size: 13px;
+  font-size: 20px;
   white-space: nowrap;
 }
 .tab.active {
@@ -446,7 +446,7 @@ onMounted(async () => {
   margin-left: 4px;
   cursor: pointer;
   opacity: 0.6;
-  font-size: 12px;
+  font-size: 18px;
 }
 .close-tab:hover {
   opacity: 1;

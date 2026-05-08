@@ -2,17 +2,17 @@
   <div class="ssh-terminal-container">
     <div class="terminal-toolbar">
       <div class="connection-info">
-        <el-tag size="small" :type="connected ? 'success' : 'info'">
+        <el-tag size="min-height" :type="connected ? 'success' : 'info'">
           {{ connected ? '已连接' : '连接中...' }}
         </el-tag>
         <span>{{ connection.name }} ({{ connection.host }}:{{ connection.port }})</span>
       </div>
       <div class="toolbar-actions">
-        <el-button size="small" :icon="FullScreen" @click="toggleFullscreen" title="全屏" />
-        <el-button size="small" @click="reconnect" :disabled="connected || isConnecting" :icon="RefreshRight">
+        <el-button size="min-height" :icon="FullScreen" @click="toggleFullscreen" title="全屏" />
+        <el-button size="min-height" @click="reconnect" :disabled="connected || isConnecting" :icon="RefreshRight">
           重新连接
         </el-button>
-        <el-button size="small" :icon="Close" @click="$emit('close')">断开</el-button>
+        <el-button size="min-height" :icon="Close" @click="$emit('close')">断开</el-button>
       </div>
     </div>
 
@@ -431,7 +431,7 @@ watch(activeTab, (newVal) => {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 13px;
+  font-size: 20px;
   color: var(--el-text-color-primary);
 }
 .toolbar-actions {
@@ -465,6 +465,7 @@ watch(activeTab, (newVal) => {
 }
 .inner-tabs :deep(.el-tabs__item) {
   padding: 0 20px !important;
+  font-size: 20px;
 }
 .terminal-container {
   height: 100%;

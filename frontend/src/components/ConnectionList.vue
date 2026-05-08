@@ -1,25 +1,24 @@
 <template>
   <div class="connection-list">
     <div class="list-header">
-      <!-- 第一行：Logo + 新建连接按钮 -->
-      <div class="top-row">
+      <!-- 第一行：Logo -->
+      <div class="logo-row">
         <div class="logo-area">
           <el-icon><Monitor /></el-icon>
           <span class="app-name">liteshell</span>
         </div>
-        <div class="btn-wrapper">
-          <el-button type="primary" size="small" @click="$emit('newConnection')">
-            <el-icon><Plus /></el-icon>
-            新建连接
-          </el-button>
-        </div>
       </div>
-      <!-- 第二行：搜索框，居中且宽度占满 -->
-      <div class="search-row">
+
+      <!-- 第二行：按钮 + 搜索框 -->
+      <div class="action-row">
+        <el-button type="primary" size="min-height" @click="$emit('newConnection')">
+          <el-icon><Plus /></el-icon>
+          新建连接
+        </el-button>
         <el-input
             v-model="searchText"
             placeholder="搜索连接"
-            size="small"
+            size="min-height"
             clearable
             :prefix-icon="Search"
             class="search-input"
@@ -264,20 +263,16 @@ onUnmounted(() => {
 }
 
 .list-header {
-  padding: 12px;
+  padding: 10px;
   border-bottom: 1px solid var(--el-border-color);
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-
-.top-row {
+.logo-row {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: nowrap;
+  justify-content: flex-start;
 }
-
 .logo-area {
   display: flex;
   align-items: center;
@@ -285,30 +280,21 @@ onUnmounted(() => {
   font-size: 16px;
   font-weight: 600;
   color: var(--el-text-color-primary);
-  white-space: nowrap;
 }
-
 .logo-area .el-icon {
   font-size: 20px;
   color: var(--el-color-primary);
 }
 
-.app-name {
-  letter-spacing: 1px;
-}
-
-.btn-wrapper {
-  flex-shrink: 0;
-}
-
-.search-row {
-  width: 100%;
-  display: flex;
-  justify-content: flex-start;
-}
-
 .search-input {
-  width: 188px;
+  flex: 1;
+  min-width: 0;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .list-content {
@@ -317,6 +303,10 @@ onUnmounted(() => {
   padding: 8px;
 }
 
+.app-name {
+  letter-spacing: 1px;
+  font-size: 24px;
+}
 .group {
   margin-bottom: 8px;
 }
@@ -328,7 +318,7 @@ onUnmounted(() => {
   padding: 6px 8px;
   cursor: pointer;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 20px;
   font-weight: 500;
   color: var(--el-text-color-primary);
 }
@@ -343,7 +333,7 @@ onUnmounted(() => {
 
 .group-count {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: 20px;
 }
 
 .group-connections {
@@ -382,7 +372,7 @@ onUnmounted(() => {
 }
 
 .conn-name {
-  font-size: 13px;
+  font-size: 20px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -391,7 +381,7 @@ onUnmounted(() => {
 }
 
 .conn-host {
-  font-size: 11px;
+  font-size: 15px;
   color: var(--el-text-color-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -399,7 +389,7 @@ onUnmounted(() => {
 }
 
 .conn-status {
-  font-size: 12px;
+  font-size: 20px;
 }
 
 .context-menu {
@@ -416,7 +406,7 @@ onUnmounted(() => {
 .context-menu div {
   padding: 8px 12px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 20px;
 }
 
 .context-menu div:hover {

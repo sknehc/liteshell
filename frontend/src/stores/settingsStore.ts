@@ -5,7 +5,7 @@ import { getConfig, saveConfigKey } from '../api/config'
 const DEFAULT_SETTINGS = {
     theme: 'auto',
     language: 'zh-CN',
-    fontSize: 14,
+    fontSize: 18,
     fontFamily: 'Consolas',
     backgroundColor: '#1e1e1e',
     foregroundColor: '#d4d4d4',

@@ -4,7 +4,7 @@
       <el-tab-pane label="终端设置" name="terminal">
         <el-form label-width="100px">
           <el-form-item label="字体大小">
-            <el-input-number v-model="localSettings.fontSize" :min="10" :max="24" style="width: 160px;" />
+            <el-input-number v-model="localSettings.fontSize" :min="14" :max="32" style="width: 160px;" />
           </el-form-item>
           <el-form-item label="字体家族">
             <el-select v-model="localSettings.fontFamily" style="width: 160px;">
@@ -91,7 +91,7 @@ const loaded = ref(false)
 const localSettings = reactive({
   theme: 'auto',
   language: 'zh-CN',
-  fontSize: 14,
+  fontSize: 18,
   fontFamily: 'Consolas',
   backgroundColor: '#1e1e1e',
   foregroundColor: '#d4d4d4',
@@ -107,7 +107,7 @@ const loadLocalSettings = async () => {
   const config = await getConfig()
   const appSettings = config?.appSettings || {}
   Object.assign(localSettings, {
-    fontSize: appSettings.fontSize ?? 14,
+    fontSize: appSettings.fontSize ?? 18,
     fontFamily: appSettings.fontFamily ?? 'Consolas',
     backgroundColor: appSettings.backgroundColor ?? '#1e1e1e',
     foregroundColor: appSettings.foregroundColor ?? '#d4d4d4',
@@ -119,7 +119,7 @@ const loadLocalSettings = async () => {
   loaded.value = true
 }
 const resetToDefault = () => {
-  localSettings.fontSize = 14
+  localSettings.fontSize = 18
   localSettings.fontFamily = 'Consolas'
   localSettings.backgroundColor = '#1e1e1e'
   localSettings.foregroundColor = '#d4d4d4'
@@ -184,7 +184,7 @@ const clearAllData = async () => {
       "appSettings": {
         "theme": "auto",
         "language": "zh-CN",
-        "fontSize": 14,
+        "fontSize": 18,
         "fontFamily": "Consolas",
         "backgroundColor": "#1e1e1e",
         "foregroundColor": "#d4d4d4",
@@ -196,7 +196,7 @@ const clearAllData = async () => {
       "sftp_col_widths": { "name": 300, "size": 100, "time": 160, "perm": 180 },
       "sftp_sort": { "field": "name", "order": "asc" },
       "sftp_overwrite_prefs": {},
-      "sidebarWidth": 215,
+      "sidebarWidth": 235,
       "expandedGroups": { "1776693493484": true }
     }
     await saveConfig(defaultConfig)
@@ -217,7 +217,7 @@ onMounted(async () => {
   color: var(--el-text-color-primary);
 }
 .form-tip {
-  font-size: 12px;
+  font-size: 18px;
   color: var(--el-text-color-secondary);
   margin-top: 4px;
 }

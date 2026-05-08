@@ -44,7 +44,7 @@ const defaultConfig = {
   "sftp_col_widths": { "name": 300, "size": 100, "time": 160, "perm": 180 },
   "sftp_sort": { "field": "name", "order": "asc" },
   "sftp_overwrite_prefs": {},
-  "sidebarWidth": 215,
+  "sidebarWidth": 235,
   "expandedGroups": { "1776693493484": true },
   "sftp_public_favorites": []
 };
