@@ -27,6 +27,7 @@
             :session-id="sessionId"
             :ws="ws"
             :ssh-ready="connected"
+            :on-open-terminal="openTerminalAtPath"
         />
         <div v-else class="sftp-placeholder">
           <el-empty description="请等待 SSH 连接成功" />
@@ -42,7 +43,7 @@ import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
 import { Close, RefreshRight, FullScreen } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import SFTPManager from './SFTPManager.vue'
 import { getConfig } from '../api/config'
 
@@ -95,7 +96,6 @@ const bindContextMenu = (enable: boolean) => {
     currentContextMenuHandler = null
   }
   if (!enable) return
-  // 修正后的 handler
   const handler = async (e: MouseEvent) => {
     e.preventDefault()
     try {
@@ -145,7 +145,6 @@ const applyTerminalSettings = async () => {
     cursor: '#aeafad'
   }
 
-  // 强制刷新渲染
   try {
     // @ts-ignore
     const core = terminal._core
@@ -157,7 +156,6 @@ const applyTerminalSettings = async () => {
     if (typeof terminal.refresh === 'function') terminal.refresh(0, terminal.rows - 1)
   } catch (e) { /* 忽略内部 API 错误 */ }
 
-  // 重新调整尺寸
   resizeTerminal()
   bindContextMenu(settings.rightClickPaste === true)
 }
@@ -167,7 +165,6 @@ const toggleFullscreen = () => {
   const elem = document.documentElement
   if (!document.fullscreenElement) {
     elem.requestFullscreen().then(() => {
-      // 全屏后延迟重新调整终端尺寸
       setTimeout(resizeTerminal, 100)
     }).catch(err => {
       console.warn('全屏失败', err)
@@ -202,7 +199,6 @@ const initTerminal = async () => {
   fitAddon.fit()
   terminal.focus()
 
-  // 选中即复制
   terminal.onSelectionChange(() => {
     if (!terminal) return
     const selectedText = terminal.getSelection()
@@ -273,7 +269,7 @@ const connectSSH = () => {
       username: props.connection.username,
       password: props.connection.authType === 'password' ? props.connection.password : undefined,
       privateKey: props.connection.authType === 'key' ? props.connection.privateKey : undefined,
-      encoding: encoding   // 新增
+      encoding: encoding
     }))
   }
 
@@ -284,7 +280,6 @@ const connectSSH = () => {
         connected.value = true
         isConnecting.value = false
         ElMessage.success('SSH连接成功')
-        // 关键：连接成功后立刻调整终端尺寸并刷新
         nextTick(() => {
           applyTerminalSettings()
           resizeTerminal()
@@ -344,12 +339,47 @@ const onSettingsUpdated = async () => {
   }
 }
 
+// 在终端打开指定路径，增加安全确认和聚焦修复
+const openTerminalAtPath = (path: string | null) => {
+  if (!path || !ws.value || ws.value.readyState !== WebSocket.OPEN) {
+    ElMessage.warning('无法发送命令')
+    return
+  }
+  ElMessageBox.confirm(
+      '终端可能正在执行脚本，切换目录可能中断当前进程。确定继续吗？',
+      '提示',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+  ).then(() => {
+    // 先切换标签页
+    activeTab.value = 'terminal'
+    const command = `cd ${path}\r`;
+    ws.value!.send(JSON.stringify({
+      type: 'ssh-data',
+      sessionId: props.sessionId,
+      data: command
+    }))
+    // 延迟聚焦，确保终端在视图切换和 DOM 更新完成后可获得焦点
+    setTimeout(() => {
+      terminal?.focus()
+      // 双重保险，部分环境下可能需要再次聚焦
+      setTimeout(() => {
+        terminal?.focus()
+      }, 50)
+    }, 150)
+  }).catch(() => {
+    // 用户取消，不执行操作
+  })
+}
+
 onMounted(async () => {
   await initTerminal()
   connectSSH()
   window.addEventListener('resize', handleResize)
   window.addEventListener('settings-updated', onSettingsUpdated)
-  // 监听全屏变化事件
   document.addEventListener('fullscreenchange', handleResize)
 })
 
@@ -372,7 +402,10 @@ watch(activeTab, (newVal) => {
   if (newVal === 'terminal') {
     nextTick(() => {
       resizeTerminal()
-      terminal?.focus()
+      // 再次确保聚焦
+      setTimeout(() => {
+        terminal?.focus()
+      }, 50)
     })
   }
 })

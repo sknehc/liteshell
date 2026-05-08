@@ -20,16 +20,26 @@
         <el-icon><Refresh /></el-icon> 刷新
       </el-button>
       <el-input v-model="searchText" placeholder="搜索当前目录文件" size="small" style="width: 200px;" clearable />
+      <el-button
+          size="small"
+          @click="onOpenTerminalClick"
+          :disabled="!sshReady || currentPath === null"
+          title="在终端中打开当前路径"
+      >
+        <el-icon><Monitor /></el-icon>
+        终端
+      </el-button>
+      <el-checkbox v-model="showHidden" size="small" :disabled="!sshReady" style="margin-left: 8px;">
+        显示隐藏文件
+      </el-checkbox>
     </div>
 
     <div class="sftp-content">
       <div class="remote-panel">
         <div class="panel-header">
           <div class="path-bar">
-            <!-- 自定义面包屑：根目录显示 /，加载中或未获取路径时显示提示 -->
             <div class="custom-breadcrumb" v-if="currentPath !== null">
-              <span class="breadcrumb-item" @click="navigateToPath(0)">
-              </span>
+              <span class="breadcrumb-item" @click="navigateToPath(0)"/>
               <template v-for="(part, idx) in currentPathParts" :key="idx">
                 <span class="breadcrumb-separator">/</span>
                 <span class="breadcrumb-item" @click="navigateToPath(idx + 1)">
@@ -46,7 +56,6 @@
           </div>
         </div>
 
-        <!-- 文件列表区域：仅在路径获取成功后才显示 -->
         <div class="file-list-wrapper" v-if="currentPath !== null">
           <div class="file-list-header" :style="{ gridTemplateColumns: gridTemplateCols }">
             <div class="col-name sortable" @click="handleSort('name')">
@@ -70,14 +79,12 @@
             </div>
           </div>
           <div class="file-list">
-            <!-- 返回上级目录 -->
             <div v-if="currentPath !== '/'" class="file-item" @click="goUpDirectory">
               <div class="col-name">
                 <el-icon><Folder /></el-icon>
                 <span class="clickable-name">..</span>
               </div>
             </div>
-            <!-- 正常文件/文件夹 -->
             <div
                 v-for="file in sortedFiles"
                 :key="file.name"
@@ -120,7 +127,6 @@
           </div>
         </div>
 
-        <!-- 未获取到路径时的加载状态 -->
         <div v-else class="loading-container">
           <el-icon class="is-loading" :size="32"><Loading /></el-icon>
           <p>正在同步工作目录...</p>
@@ -139,14 +145,12 @@
       </div>
     </div>
 
-    <!-- 右键菜单 -->
     <div v-if="contextMenuVisible" class="context-menu" :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }">
       <div @click="editContextFile">编辑</div>
       <div @click="renameContextFile">重命名</div>
       <div @click="chmodFile">权限</div>
     </div>
 
-    <!-- 权限修改对话框 -->
     <el-dialog v-model="chmodDialogVisible" title="修改权限" width="450px">
       <el-form>
         <el-form-item label="权限值 (八进制)">
@@ -166,7 +170,6 @@
       </template>
     </el-dialog>
 
-    <!-- 覆盖确认对话框 -->
     <el-dialog v-model="confirmOverwriteVisible" title="文件已存在" width="450px" :close-on-click-modal="false">
       <p>文件 <strong>{{ pendingFile?.name }}</strong> 在目标目录中已存在。</p>
       <p>请选择操作：</p>
@@ -184,7 +187,6 @@
       </template>
     </el-dialog>
 
-    <!-- 编辑文件对话框 -->
     <el-dialog v-model="editDialogVisible" title="编辑文件" width="80%" top="5vh" @close="closeEditor">
       <div class="editor-container">
         <textarea ref="editorTextarea" v-model="editContent" class="code-editor" :style="{ height: '60vh', fontFamily: 'monospace', fontSize: '14px' }"></textarea>
@@ -195,7 +197,6 @@
       </template>
     </el-dialog>
 
-    <!-- 重命名对话框 -->
     <el-dialog v-model="renameDialogVisible" title="重命名" width="400px">
       <el-form>
         <el-form-item label="新名称">
@@ -212,7 +213,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { Upload, Download, FolderAdd, Delete, Refresh, Folder, Document, CopyDocument, DArrowRight, Loading } from '@element-plus/icons-vue'
+import {
+  Upload, Download, FolderAdd, Delete, Refresh, Folder, Document,
+  CopyDocument, DArrowRight, Loading, Monitor
+} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getConfig, saveConfigKey } from '../api/config'
 
@@ -221,17 +225,18 @@ const props = defineProps<{
   sessionId: string
   ws: WebSocket | null
   sshReady: boolean
+  onOpenTerminal?: (path: string | null) => void
 }>()
 
-const currentPath = ref<string | null>(null)  // 初始为 null，等待同步
+const currentPath = ref<string | null>(null)
 const files = ref<any[]>([])
 const selectedFile = ref<any>(null)
 const searchText = ref('')
 const transfers = ref<any[]>([])
+const showHidden = ref(false)
 let messageHandler: ((event: MessageEvent) => void) | null = null
 const isNavigating = ref(false)
 
-// ========== 自定义面包屑 ==========
 const currentPathParts = computed(() => {
   if (currentPath.value === null) return []
   return currentPath.value.split('/').filter(p => p)
@@ -244,7 +249,6 @@ const getPathFromIndex = (idx: number) => {
   return '/' + parts.join('/')
 }
 
-// ========== 请求 ID 管理（用于安全导航） ==========
 let sftpRequestId = 0
 const pendingRequests = new Map<number, { resolve: Function; reject: Function }>()
 
@@ -328,7 +332,6 @@ const copyPath = () => {
   ElMessage.success('路径已复制')
 }
 
-// ========== 列宽调整 ==========
 const colWidths = ref({ name: 300, size: 100, time: 160, perm: 180 })
 const gridTemplateCols = computed(() => `${colWidths.value.name}px ${colWidths.value.size}px ${colWidths.value.time}px ${colWidths.value.perm}px`)
 
@@ -369,7 +372,6 @@ const onMouseUp = () => {
   nextTick(() => {})
 }
 
-// ========== 排序 ==========
 type SortField = 'name' | 'size' | 'modifyTime'
 const sortField = ref<SortField>('name')
 const sortOrder = ref<'asc' | 'desc'>('asc')
@@ -387,7 +389,10 @@ const loadSortState = async () => {
   }
 }
 const sortedFiles = computed(() => {
-  let list = [...filteredFiles.value]
+  let list = filteredFiles.value
+  if (!showHidden.value) {
+    list = list.filter(f => !f.name.startsWith('.'))
+  }
   const field = sortField.value, order = sortOrder.value
   list.sort((a, b) => {
     let aVal = field === 'name' ? a.name : (field === 'size' ? a.size : a.modifyTime)
@@ -399,7 +404,6 @@ const sortedFiles = computed(() => {
   return list
 })
 
-// ========== 右键菜单与权限 ==========
 const contextMenuVisible = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
@@ -408,7 +412,6 @@ const chmodDialogVisible = ref(false)
 const chmodValue = ref('755')
 const chmodChecks = ref<string[]>([])
 
-// ========== 拖拽上传 ==========
 const dragOverFolder = ref<any>(null)
 
 const confirmOverwriteVisible = ref(false)
@@ -547,7 +550,6 @@ const uploadFile = () => {
   input.click()
 }
 
-// ========== 新建文件 ==========
 const createFile = async () => {
   if (currentPath.value === null) return
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
@@ -575,7 +577,6 @@ const createFile = async () => {
   } catch (err) { if (err !== 'cancel') ElMessage.error('创建文件失败') }
 }
 
-// ========== 编辑文件 ==========
 const editDialogVisible = ref(false)
 const editContent = ref('')
 const editingFilePath = ref('')
@@ -627,7 +628,6 @@ const closeEditor = () => {
   editingFilePath.value = ''
 }
 
-// ========== 重命名 ==========
 const renameDialogVisible = ref(false)
 const newName = ref('')
 const renameTarget = ref<any>(null)
@@ -668,7 +668,6 @@ const confirmRename = async () => {
   }
 }
 
-// ========== 文件列表操作 ==========
 const formatPermissions = (file: any): string => {
   let mode = file.permissions, numericMode = typeof mode === 'string' ? parseInt(mode, 8) : mode
   if (isNaN(numericMode)) numericMode = 0
@@ -834,27 +833,24 @@ const confirmChmod = async () => {
   }
 }
 
-// ========== WebSocket 消息处理（支持请求 ID 及 sftp-pwd-response） ==========
 const handleWebSocketMessage = (event: MessageEvent) => {
   if (!props.ws || event.target !== props.ws) return
   const message = JSON.parse(event.data)
   if (message.sessionId !== props.sessionId) return
   const { type, requestId, success, files: fileList, error, path } = message
 
-  // 处理 sftp-pwd-response
   if (type === 'sftp-pwd-response') {
     if (success && path) {
       currentPath.value = path
       refreshFileList()
     } else {
       ElMessage.error('获取当前目录失败: ' + (error || '未知错误'))
-      currentPath.value = '/'  // 降级到根目录
+      currentPath.value = '/'
       refreshFileList()
     }
     return
   }
 
-  // 处理带 requestId 的列表响应
   if (type === 'sftp-list-response' && requestId && pendingRequests.has(requestId)) {
     const { resolve, reject } = pendingRequests.get(requestId)!
     pendingRequests.delete(requestId)
@@ -866,7 +862,6 @@ const handleWebSocketMessage = (event: MessageEvent) => {
     return
   }
 
-  // 其他消息处理
   switch (type) {
     case 'sftp-list-response':
       if (success) {
@@ -910,7 +905,6 @@ watch(() => props.ws, (newWs, oldWs) => {
   }
 }, { immediate: true })
 
-// 发送请求获取当前目录
 const fetchCurrentDirectory = () => {
   if (!props.sshReady || !props.ws || props.ws.readyState !== WebSocket.OPEN) return
   props.ws.send(JSON.stringify({
@@ -919,18 +913,22 @@ const fetchCurrentDirectory = () => {
   }))
 }
 
-// 当 sshReady 变为 true 且 currentPath 仍为 null 时，请求当前工作目录
 watch(() => props.sshReady, (ready) => {
   if (ready && currentPath.value === null) {
     fetchCurrentDirectory()
   }
 })
 
+const onOpenTerminalClick = () => {
+  if (props.onOpenTerminal) {
+    props.onOpenTerminal(currentPath.value)
+  }
+}
+
 onMounted(async () => {
   await loadColWidths()
   await loadSortState()
   await loadOverwritePrefs()
-  // 如果挂载时已就绪，立即请求目录
   if (props.sshReady && currentPath.value === null) {
     fetchCurrentDirectory()
   }
@@ -944,7 +942,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 自定义面包屑样式 */
+/* 样式与之前一致，省略，实际文件中应包含完整样式 */
 .custom-breadcrumb {
   display: flex;
   align-items: center;
@@ -962,16 +960,12 @@ onUnmounted(() => {
   margin: 0 4px;
   color: var(--el-text-color-secondary);
 }
-
-/* 文件夹图标颜色 */
 .clickable-icon.folder-icon {
   color: #e6a23c !important;
 }
 .file-item .folder-icon {
   color: #e6a23c;
 }
-
-/* 原有其他样式 */
 .code-editor {
   width: 100%;
   padding: 10px;
@@ -994,6 +988,7 @@ onUnmounted(() => {
   padding: 8px 12px;
   border-bottom: 1px solid var(--el-border-color);
   flex-wrap: wrap;
+  align-items: center;
 }
 .sftp-content {
   flex: 1;
