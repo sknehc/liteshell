@@ -45,7 +45,8 @@ const defaultConfig = {
   "sftp_sort": { "field": "name", "order": "asc" },
   "sftp_overwrite_prefs": {},
   "sidebarWidth": 215,
-  "expandedGroups": { "1776693493484": true }
+  "expandedGroups": { "1776693493484": true },
+  "sftp_public_favorites": []
 };
 
 function loadConfig() {

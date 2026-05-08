@@ -13,6 +13,7 @@ export interface Connection {
   authType: string
   password?: string
   privateKey?: string
+  favorites?: { id: string; name: string; path: string }[]
 }
 
 export interface Group {

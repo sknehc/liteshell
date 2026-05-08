@@ -32,6 +32,37 @@
       <el-checkbox v-model="showHidden" size="small" :disabled="!sshReady" style="margin-left: 8px;">
         显示隐藏文件
       </el-checkbox>
+
+      <!-- 收藏按钮 -->
+      <el-button size="small" @click="openFavoriteDialog" :disabled="!sshReady || currentPath === null" style="margin-left: auto; margin-right: 0;">
+        <el-icon><Star /></el-icon> 收藏
+      </el-button>
+
+      <!-- 收藏夹下拉（公用+私有） -->
+      <el-dropdown trigger="click" :disabled="allFavorites.length === 0" style="margin-left: 4px;">
+        <el-button size="small">
+          收藏夹 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item v-for="fav in allFavorites" :key="fav.id + (fav.isPublic ? '_pub' : '_priv')" class="favorite-item">
+              <div class="favorite-row">
+                <span class="favorite-name" @click.stop="goToFavoritePath(fav.path)">
+                  {{ fav.name }}
+                  <el-tag v-if="fav.isPublic" size="small" type="warning" style="margin-left: 4px;">公用</el-tag>
+                </span>
+                <span class="favorite-actions">
+                  <el-icon class="action-icon" @click.stop="editFavorite(fav)"><Edit /></el-icon>
+                  <el-icon class="action-icon" @click.stop="deleteFavorite(fav)"><Close /></el-icon>
+                </span>
+              </div>
+            </el-dropdown-item>
+            <el-dropdown-item v-if="allFavorites.length === 0" disabled>
+              暂无收藏
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </div>
 
     <div class="sftp-content">
@@ -39,7 +70,7 @@
         <div class="panel-header">
           <div class="path-bar">
             <div class="custom-breadcrumb" v-if="currentPath !== null">
-              <span class="breadcrumb-item" @click="navigateToPath(0)"/>
+              <span class="breadcrumb-item" @click="navigateToPath(0)">/</span>
               <template v-for="(part, idx) in currentPathParts" :key="idx">
                 <span class="breadcrumb-separator">/</span>
                 <span class="breadcrumb-item" @click="navigateToPath(idx + 1)">
@@ -208,6 +239,32 @@
         <el-button type="primary" @click="confirmRename">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 收藏编辑对话框 -->
+    <el-dialog v-model="favoriteDialogVisible" :title="isEditingFavorite ? '编辑收藏' : '添加收藏'" width="480px" destroy-on-close>
+      <el-form :model="favoriteForm" label-width="80px">
+        <el-form-item label="名称">
+          <el-input v-model="favoriteForm.name" placeholder="收藏名称" />
+        </el-form-item>
+        <el-form-item label="路径">
+          <el-input v-model="favoriteForm.path" placeholder="服务器路径" />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-switch
+              v-model="favoriteForm.isPublic"
+              active-text="公用"
+              inactive-text="私有"
+              :active-value="true"
+              :inactive-value="false"
+          />
+          <div class="form-tip">公用收藏对所有连接可见，私有收藏仅当前连接可见</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="favoriteDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveFavorite">{{ isEditingFavorite ? '更新' : '添加' }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -215,10 +272,12 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import {
   Upload, Download, FolderAdd, Delete, Refresh, Folder, Document,
-  CopyDocument, DArrowRight, Loading, Monitor
+  CopyDocument, DArrowRight, Loading, Monitor, Star, Edit, Close, ArrowDown
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getConfig, saveConfigKey } from '../api/config'
+import { v4 as uuidv4 } from '../utils/uuid'
+import { useConnectionStore } from '../stores/connectionStore'
 
 const props = defineProps<{
   connection: any
@@ -227,6 +286,8 @@ const props = defineProps<{
   sshReady: boolean
   onOpenTerminal?: (path: string | null) => void
 }>()
+
+const connectionStore = useConnectionStore()
 
 const currentPath = ref<string | null>(null)
 const files = ref<any[]>([])
@@ -237,6 +298,7 @@ const showHidden = ref(false)
 let messageHandler: ((event: MessageEvent) => void) | null = null
 const isNavigating = ref(false)
 
+// ========== 自定义面包屑 ==========
 const currentPathParts = computed(() => {
   if (currentPath.value === null) return []
   return currentPath.value.split('/').filter(p => p)
@@ -249,6 +311,7 @@ const getPathFromIndex = (idx: number) => {
   return '/' + parts.join('/')
 }
 
+// ========== 请求 ID 管理（用于安全导航） ==========
 let sftpRequestId = 0
 const pendingRequests = new Map<number, { resolve: Function; reject: Function }>()
 
@@ -332,6 +395,7 @@ const copyPath = () => {
   ElMessage.success('路径已复制')
 }
 
+// ========== 列宽调整 ==========
 const colWidths = ref({ name: 300, size: 100, time: 160, perm: 180 })
 const gridTemplateCols = computed(() => `${colWidths.value.name}px ${colWidths.value.size}px ${colWidths.value.time}px ${colWidths.value.perm}px`)
 
@@ -372,6 +436,7 @@ const onMouseUp = () => {
   nextTick(() => {})
 }
 
+// ========== 排序 ==========
 type SortField = 'name' | 'size' | 'modifyTime'
 const sortField = ref<SortField>('name')
 const sortOrder = ref<'asc' | 'desc'>('asc')
@@ -404,6 +469,7 @@ const sortedFiles = computed(() => {
   return list
 })
 
+// ========== 右键菜单与权限 ==========
 const contextMenuVisible = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
@@ -412,6 +478,7 @@ const chmodDialogVisible = ref(false)
 const chmodValue = ref('755')
 const chmodChecks = ref<string[]>([])
 
+// ========== 拖拽上传 ==========
 const dragOverFolder = ref<any>(null)
 
 const confirmOverwriteVisible = ref(false)
@@ -550,6 +617,7 @@ const uploadFile = () => {
   input.click()
 }
 
+// ========== 新建文件 ==========
 const createFile = async () => {
   if (currentPath.value === null) return
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
@@ -577,6 +645,7 @@ const createFile = async () => {
   } catch (err) { if (err !== 'cancel') ElMessage.error('创建文件失败') }
 }
 
+// ========== 编辑文件 ==========
 const editDialogVisible = ref(false)
 const editContent = ref('')
 const editingFilePath = ref('')
@@ -628,6 +697,7 @@ const closeEditor = () => {
   editingFilePath.value = ''
 }
 
+// ========== 重命名 ==========
 const renameDialogVisible = ref(false)
 const newName = ref('')
 const renameTarget = ref<any>(null)
@@ -668,6 +738,7 @@ const confirmRename = async () => {
   }
 }
 
+// ========== 文件列表操作 ==========
 const formatPermissions = (file: any): string => {
   let mode = file.permissions, numericMode = typeof mode === 'string' ? parseInt(mode, 8) : mode
   if (isNaN(numericMode)) numericMode = 0
@@ -833,6 +904,7 @@ const confirmChmod = async () => {
   }
 }
 
+// ========== WebSocket 消息处理 ==========
 const handleWebSocketMessage = (event: MessageEvent) => {
   if (!props.ws || event.target !== props.ws) return
   const message = JSON.parse(event.data)
@@ -925,10 +997,188 @@ const onOpenTerminalClick = () => {
   }
 }
 
+// ========== 收藏功能（支持公用/私有） ==========
+interface Favorite {
+  id: string
+  name: string
+  path: string
+}
+
+// 私用收藏来自连接
+const privateFavorites = ref<{ id: string; name: string; path: string }[]>([])
+
+// 公用收藏来自全局配置
+const publicFavorites = ref<{ id: string; name: string; path: string }[]>([])
+
+// 合并后的收藏列表
+const allFavorites = computed(() => {
+  const priv = privateFavorites.value.map(f => ({ ...f, isPublic: false }))
+  const pub = publicFavorites.value.map(f => ({ ...f, isPublic: true }))
+  return [...pub, ...priv]
+})
+
+const favoriteDialogVisible = ref(false)
+const favoriteForm = ref({
+  name: '',
+  path: '',
+  isPublic: false  // 默认私用
+})
+const isEditingFavorite = ref(false)
+const editingFavoriteId = ref<string | null>(null)
+// 记录当前编辑的收藏是公用还是私用
+const editingIsPublic = ref(false)
+
+// 加载私用收藏（跟随连接）
+watch(() => props.connection?.favorites, (newVal) => {
+  privateFavorites.value = newVal || []
+}, { immediate: true, deep: true })
+
+// 加载公用收藏
+const loadPublicFavorites = async () => {
+  try {
+    const config = await getConfig()
+    publicFavorites.value = config?.sftp_public_favorites || []
+  } catch (e) {
+    console.error('加载公用收藏失败', e)
+  }
+}
+
+// 保存公用收藏
+const savePublicFavorites = async (list: { id: string; name: string; path: string }[]) => {
+  await saveConfigKey('sftp_public_favorites', list)
+}
+
+// 保存私用收藏到连接
+const savePrivateFavorites = async (list: { id: string; name: string; path: string }[]) => {
+  await connectionStore.updateConnection(props.connection.id, {
+    favorites: list
+  })
+}
+
+// 打开添加对话框
+const openFavoriteDialog = () => {
+  if (currentPath.value === null) return
+  isEditingFavorite.value = false
+  editingFavoriteId.value = null
+  favoriteForm.value = {
+    name: '',
+    path: currentPath.value,
+    isPublic: false
+  }
+  favoriteDialogVisible.value = true
+}
+
+// 编辑收藏
+const editFavorite = (fav: Favorite) => {
+  isEditingFavorite.value = true
+  editingFavoriteId.value = fav.id
+  editingIsPublic.value = fav.isPublic
+  favoriteForm.value = {
+    name: fav.name,
+    path: fav.path,
+    isPublic: fav.isPublic
+  }
+  favoriteDialogVisible.value = true
+}
+
+// 删除收藏
+const deleteFavorite = (fav: Favorite) => {
+  ElMessageBox.confirm(`确定删除收藏“${fav.name}”吗？`, '提示', { type: 'warning' })
+      .then(async () => {
+        if (fav.isPublic) {
+          const updated = publicFavorites.value.filter(f => f.id !== fav.id)
+          publicFavorites.value = updated
+          await savePublicFavorites(updated)
+        } else {
+          const updated = privateFavorites.value.filter(f => f.id !== fav.id)
+          privateFavorites.value = updated
+          await savePrivateFavorites(updated)
+        }
+        ElMessage.success('已删除')
+      })
+      .catch(() => {})
+}
+
+// 保存（添加或更新）
+const saveFavorite = async () => {
+  if (!favoriteForm.value.name.trim() || !favoriteForm.value.path.trim()) {
+    ElMessage.warning('名称和路径不能为空')
+    return
+  }
+
+  const newIsPublic = favoriteForm.value.isPublic
+
+  if (isEditingFavorite.value && editingFavoriteId.value) {
+    // 编辑模式
+    const oldIsPublic = editingIsPublic.value
+    if (oldIsPublic === newIsPublic) {
+      // 未改变类型，更新原列表
+      if (newIsPublic) {
+        const updated = publicFavorites.value.map(f =>
+            f.id === editingFavoriteId.value ? { id: f.id, name: favoriteForm.value.name, path: favoriteForm.value.path } : f
+        )
+        publicFavorites.value = updated
+        await savePublicFavorites(updated)
+      } else {
+        const updated = privateFavorites.value.map(f =>
+            f.id === editingFavoriteId.value ? { id: f.id, name: favoriteForm.value.name, path: favoriteForm.value.path } : f
+        )
+        privateFavorites.value = updated
+        await savePrivateFavorites(updated)
+      }
+    } else {
+      // 类型改变：从原列表删除，添加到新列表
+      const newItem = {
+        id: editingFavoriteId.value,
+        name: favoriteForm.value.name,
+        path: favoriteForm.value.path
+      }
+      if (oldIsPublic) {
+        publicFavorites.value = publicFavorites.value.filter(f => f.id !== editingFavoriteId.value)
+        await savePublicFavorites(publicFavorites.value)
+      } else {
+        privateFavorites.value = privateFavorites.value.filter(f => f.id !== editingFavoriteId.value)
+        await savePrivateFavorites(privateFavorites.value)
+      }
+      if (newIsPublic) {
+        publicFavorites.value.push(newItem)
+        await savePublicFavorites(publicFavorites.value)
+      } else {
+        privateFavorites.value.push(newItem)
+        await savePrivateFavorites(privateFavorites.value)
+      }
+    }
+    ElMessage.success('已更新')
+  } else {
+    // 添加模式
+    const newItem = {
+      id: uuidv4(),
+      name: favoriteForm.value.name,
+      path: favoriteForm.value.path
+    }
+    if (newIsPublic) {
+      publicFavorites.value.push(newItem)
+      await savePublicFavorites(publicFavorites.value)
+    } else {
+      privateFavorites.value.push(newItem)
+      await savePrivateFavorites(privateFavorites.value)
+    }
+    ElMessage.success('已收藏')
+  }
+  favoriteDialogVisible.value = false
+}
+
+// 点击收藏跳转
+const goToFavoritePath = (path: string) => {
+  if (currentPath.value === null) return
+  navigateToSafePath(path)
+}
+
 onMounted(async () => {
   await loadColWidths()
   await loadSortState()
   await loadOverwritePrefs()
+  await loadPublicFavorites()
   if (props.sshReady && currentPath.value === null) {
     fetchCurrentDirectory()
   }
@@ -942,7 +1192,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 样式与之前一致，省略，实际文件中应包含完整样式 */
+/* 自定义面包屑样式 */
 .custom-breadcrumb {
   display: flex;
   align-items: center;
@@ -960,12 +1210,16 @@ onUnmounted(() => {
   margin: 0 4px;
   color: var(--el-text-color-secondary);
 }
+
+/* 文件夹图标颜色 */
 .clickable-icon.folder-icon {
   color: #e6a23c !important;
 }
 .file-item .folder-icon {
   color: #e6a23c;
 }
+
+/* 原有其他样式 */
 .code-editor {
   width: 100%;
   padding: 10px;
@@ -1171,5 +1425,48 @@ onUnmounted(() => {
 }
 .context-menu div:hover {
   background: var(--el-fill-color-light);
+}
+
+/* 收藏相关样式 */
+.favorite-item {
+  padding: 0 !important;
+}
+.favorite-row {
+  display: flex;
+  align-items: center;
+  padding: 5px 16px;
+  width: 100%;
+  min-width: 260px;
+  cursor: default;
+}
+.favorite-name {
+  flex: 1;
+  cursor: pointer;
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.favorite-name:hover {
+  color: var(--el-color-primary);
+}
+.favorite-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
+.action-icon {
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+}
+.action-icon:hover {
+  color: var(--el-color-primary);
+}
+.form-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-top: 4px;
 }
 </style>
