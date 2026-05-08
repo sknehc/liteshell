@@ -1,27 +1,26 @@
 <template>
   <div class="sftp-container" @dragenter="onDragEnter" @dragover="onDragOver" @drop="onDrop">
     <div class="sftp-toolbar">
-      <el-button size="min-height" type="primary" @click="uploadFile" :disabled="!sshReady || currentPath === null">
+      <el-button size="default" type="primary" @click="uploadFile" :disabled="!sshReady || currentPath === null">
         <el-icon><Upload /></el-icon> 上传
       </el-button>
-      <el-button size="min-height" @click="downloadSelectedFile" :disabled="!sshReady || !selectedFile">
+      <el-button size="default" @click="downloadSelectedFile" :disabled="!sshReady || !selectedFile">
         <el-icon><Download /></el-icon> 下载
       </el-button>
-      <el-button size="min-height" @click="createFile" :disabled="!sshReady || currentPath === null">
+      <el-button size="default" @click="createFile" :disabled="!sshReady || currentPath === null">
         <el-icon><Document /></el-icon> 新建文件
       </el-button>
-      <el-button size="min-height" @click="createFolder" :disabled="!sshReady || currentPath === null">
+      <el-button size="default" @click="createFolder" :disabled="!sshReady || currentPath === null">
         <el-icon><FolderAdd /></el-icon> 新建文件夹
       </el-button>
-      <el-button size="min-height" @click="deleteFile" :disabled="!sshReady || !selectedFile">
+      <el-button size="default" @click="deleteFile" :disabled="!sshReady || !selectedFile">
         <el-icon><Delete /></el-icon> 删除
       </el-button>
-      <el-button size="min-height" @click="refreshFileList" :disabled="!sshReady || currentPath === null">
+      <el-button size="default" @click="refreshFileList" :disabled="!sshReady || currentPath === null">
         <el-icon><Refresh /></el-icon> 刷新
       </el-button>
-      <el-input v-model="searchText" placeholder="搜索当前目录文件" size="min-height" style="width: 200px;" clearable />
       <el-button
-          size="min-height"
+          size="default"
           @click="onOpenTerminalClick"
           :disabled="!sshReady || currentPath === null"
           title="在终端中打开当前路径"
@@ -29,16 +28,20 @@
         <el-icon><Monitor /></el-icon>
         终端
       </el-button>
-      <el-checkbox v-model="showHidden" size="min-height" :disabled="!sshReady" style="margin-left: 8px;">
+      <el-button
+          size="default"
+          @click="toggleShowHidden"
+          :disabled="!sshReady"
+          :type="showHidden ? 'primary' : 'default' "
+      >
+        <el-icon>
+          <View v-if="showHidden" />
+          <Hide v-else />
+        </el-icon>
         显示隐藏文件
-      </el-checkbox>
-
-      <el-button size="min-height" @click="openFavoriteDialog" :disabled="!sshReady || currentPath === null" style="margin-left: auto; margin-right: 0;">
-        <el-icon><Star /></el-icon> 收藏
       </el-button>
-
       <el-dropdown ref="favoritesDropdownRef" trigger="click" :disabled="allFavorites.length === 0" style="margin-left: 4px;">
-        <el-button size="min-height">
+        <el-button size="default">
           收藏夹 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
         </el-button>
         <template #dropdown>
@@ -46,8 +49,9 @@
             <el-dropdown-item v-for="fav in allFavorites" :key="fav.id + (fav.isPublic ? '_pub' : '_priv')" class="favorite-item">
               <div class="favorite-row">
                 <span class="favorite-name" @click.stop="goToFavoritePath(fav.path)">
+                  <el-tag v-if="fav.isPublic" size="default" type="warning" style="margin-right: 4px;">公用</el-tag>
+                  <el-tag v-else size="default" type="success" style="margin-right: 4px;">私有</el-tag>
                   {{ fav.name }}
-                  <el-tag v-if="fav.isPublic" size="min-height" type="warning" style="margin-left: 4px;">公用</el-tag>
                 </span>
                 <span class="favorite-actions">
                   <el-icon class="action-icon" @click.stop="editFavorite(fav)"><Edit /></el-icon>
@@ -59,6 +63,11 @@
           </el-dropdown-menu>
         </template>
       </el-dropdown>
+      <el-input v-model="searchText" placeholder="搜索当前目录文件" size="default" style="width: 200px;" clearable />
+
+
+
+
     </div>
 
     <div class="sftp-content">
@@ -78,8 +87,15 @@
               <el-icon class="is-loading"><Loading /></el-icon>
               <span>正在获取当前目录...</span>
             </div>
-            <el-button size="min-height" :icon="DArrowRight" @click="goToPathSafe" title="跳转到路径" :disabled="currentPath === null" />
-            <el-button size="min-height" :icon="CopyDocument" @click="copyPath" title="复制完整路径" :disabled="currentPath === null" />
+            <el-button size="default" :icon="DArrowRight" @click="goToPathSafe" title="跳转到指定路径" :disabled="currentPath === null" >
+              跳转
+            </el-button>
+            <el-button size="default" :icon="CopyDocument" @click="copyPath" title="复制完整路径" :disabled="currentPath === null" >
+              复制
+            </el-button>
+            <el-button size="default" @click="openFavoriteDialog" title="收藏当前路径" :disabled="!sshReady || currentPath === null" style="margin-left: auto; margin-right: 0;">
+              <el-icon><Star /></el-icon> 收藏
+            </el-button>
           </div>
         </div>
 
@@ -145,7 +161,7 @@
     </div>
 
     <div class="transfer-panel" v-if="transfers.length > 0">
-      <div class="transfer-header"><span>传输队列</span><el-button size="min-height" text @click="clearTransfers">关闭</el-button></div>
+      <div class="transfer-header"><span>传输队列</span><el-button size="default" text @click="clearTransfers">关闭</el-button></div>
       <div v-for="t in transfers" :key="t.id" class="transfer-item">
         <span>{{ t.name }}</span>
         <el-progress :percentage="t.progress" :status="t.status === 'error' ? 'exception' : undefined" />
@@ -242,7 +258,9 @@ const currentPathParts = computed(() => {
   if (currentPath.value === null) return []
   return currentPath.value.split('/').filter(p => p)
 })
-
+const toggleShowHidden = () => {
+  showHidden.value = !showHidden.value;
+};
 const getPathFromIndex = (idx: number) => {
   if (currentPath.value === null) return '/'
   if (idx === 0) return '/'
@@ -1079,9 +1097,9 @@ onUnmounted(() => {
 .favorite-row {
   display: flex;
   align-items: center;
-  padding: 5px 16px;
+  padding: 4px 0px;
   width: 100%;
-  min-width: 260px;
+  min-width: 180px;
   cursor: default;
 }
 .favorite-name {
@@ -1099,7 +1117,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 12px;
 }
 .action-icon {
   font-size: 14px;
@@ -1113,5 +1130,8 @@ onUnmounted(() => {
   font-size: 20px;
   color: var(--el-text-color-secondary);
   margin-top: 4px;
+}
+.el-button .el-icon {
+  margin-right: 4px;
 }
 </style>

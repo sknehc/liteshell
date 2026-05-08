@@ -11,14 +11,14 @@
 
       <!-- 第二行：按钮 + 搜索框 -->
       <div class="action-row">
-        <el-button type="primary" size="min-height" @click="$emit('newConnection')">
+        <el-button type="primary" size="default" @click="$emit('newConnection')">
           <el-icon><Plus /></el-icon>
           新建连接
         </el-button>
         <el-input
             v-model="searchText"
             placeholder="搜索连接"
-            size="min-height"
+            size="default"
             clearable
             :prefix-icon="Search"
             class="search-input"

@@ -2,12 +2,12 @@
   <div class="rdp-container">
     <div class="rdp-toolbar">
       <div class="connection-info">
-        <el-tag size="min-height" type="info">RDP远程桌面</el-tag>
+        <el-tag size="default" type="info">RDP远程桌面</el-tag>
         <span>{{ connection.name }} ({{ connection.host }}:{{ connection.port || 3389 }})</span>
       </div>
       <div class="toolbar-actions">
-        <el-button size="min-height" @click="toggleFullscreen">全屏</el-button>
-        <el-button size="min-height" @click="$emit('close')">断开</el-button>
+        <el-button size="default" @click="toggleFullscreen">全屏</el-button>
+        <el-button size="default" @click="$emit('close')">断开</el-button>
       </div>
     </div>
     <div class="rdp-viewer">
