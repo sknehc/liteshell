@@ -256,8 +256,23 @@ class SSHManager {
     const sftp = await this.getSFTP(sessionId);
     return new Promise((resolve, reject) => {
       sftp.mkdir(path, (err) => {
-        if (err) reject(err);
-        else resolve(true);
+        if (err) {
+          // err.code === 4 通常表示操作失败，可能是目录已存在
+          if (err.code === 4) {
+            sftp.stat(path, (statErr, stats) => {
+              if (!statErr && stats.isDirectory()) {
+                // 目录已存在 -> 视为成功
+                resolve(true);
+              } else {
+                reject(new Error(`无法创建目录: ${statErr ? statErr.message : '路径已存在但不是目录或无法访问'}`));
+              }
+            });
+          } else {
+            reject(err);
+          }
+        } else {
+          resolve(true);
+        }
       });
     });
   }

@@ -33,12 +33,10 @@
         显示隐藏文件
       </el-checkbox>
 
-      <!-- 收藏按钮 -->
       <el-button size="min-height" @click="openFavoriteDialog" :disabled="!sshReady || currentPath === null" style="margin-left: auto; margin-right: 0;">
         <el-icon><Star /></el-icon> 收藏
       </el-button>
 
-      <!-- 收藏夹下拉（公用+私有） -->
       <el-dropdown ref="favoritesDropdownRef" trigger="click" :disabled="allFavorites.length === 0" style="margin-left: 4px;">
         <el-button size="min-height">
           收藏夹 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -57,9 +55,7 @@
                 </span>
               </div>
             </el-dropdown-item>
-            <el-dropdown-item v-if="allFavorites.length === 0" disabled>
-              暂无收藏
-            </el-dropdown-item>
+            <el-dropdown-item v-if="allFavorites.length === 0" disabled>暂无收藏</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -90,18 +86,15 @@
         <div class="file-list-wrapper" v-if="currentPath !== null">
           <div class="file-list-header" :style="{ gridTemplateColumns: gridTemplateCols }">
             <div class="col-name sortable" @click="handleSort('name')">
-              名称
-              <span class="sort-icon">{{ getSortIcon('name') }}</span>
+              名称 <span class="sort-icon">{{ getSortIcon('name') }}</span>
               <div class="resize-handle" @mousedown.prevent="startResize('name', $event)"></div>
             </div>
             <div class="col-size sortable" @click="handleSort('size')">
-              大小
-              <span class="sort-icon">{{ getSortIcon('size') }}</span>
+              大小 <span class="sort-icon">{{ getSortIcon('size') }}</span>
               <div class="resize-handle" @mousedown.prevent="startResize('size', $event)"></div>
             </div>
             <div class="col-time sortable" @click="handleSort('modifyTime')">
-              修改时间
-              <span class="sort-icon">{{ getSortIcon('modifyTime') }}</span>
+              修改时间 <span class="sort-icon">{{ getSortIcon('modifyTime') }}</span>
               <div class="resize-handle" @mousedown.prevent="startResize('time', $event)"></div>
             </div>
             <div class="col-perm">
@@ -139,37 +132,20 @@
                 </el-icon>
                 <span @click.stop="handleNameClick(file)" class="clickable-name">{{ file.name }}</span>
               </div>
-              <div class="col-size">
-                {{ formatSize(file.size) }}
-              </div>
-              <div class="col-time">
-                {{ formatTime(file.modifyTime) }}
-              </div>
-              <div class="col-perm">
-                {{ formatPermissions(file) }}
-              </div>
+              <div class="col-size">{{ formatSize(file.size) }}</div>
+              <div class="col-time">{{ formatTime(file.modifyTime) }}</div>
+              <div class="col-perm">{{ formatPermissions(file) }}</div>
             </div>
-            <div v-if="filteredFiles.length === 0 && currentPath !== '/'" class="empty-list">
-              <el-empty description="暂无文件" />
-            </div>
-            <div v-if="filteredFiles.length === 0 && currentPath === '/'" class="empty-list">
-              <el-empty description="目录为空" />
-            </div>
+            <div v-if="filteredFiles.length === 0 && currentPath !== '/'" class="empty-list"><el-empty description="暂无文件" /></div>
+            <div v-if="filteredFiles.length === 0 && currentPath === '/'" class="empty-list"><el-empty description="目录为空" /></div>
           </div>
         </div>
-
-        <div v-else class="loading-container">
-          <el-icon class="is-loading" :size="32"><Loading /></el-icon>
-          <p>正在同步工作目录...</p>
-        </div>
+        <div v-else class="loading-container"><el-icon class="is-loading" :size="32"><Loading /></el-icon><p>正在同步工作目录...</p></div>
       </div>
     </div>
 
     <div class="transfer-panel" v-if="transfers.length > 0">
-      <div class="transfer-header">
-        <span>传输队列</span>
-        <el-button size="min-height" text @click="clearTransfers">关闭</el-button>
-      </div>
+      <div class="transfer-header"><span>传输队列</span><el-button size="min-height" text @click="clearTransfers">关闭</el-button></div>
       <div v-for="t in transfers" :key="t.id" class="transfer-item">
         <span>{{ t.name }}</span>
         <el-progress :percentage="t.progress" :status="t.status === 'error' ? 'exception' : undefined" />
@@ -184,9 +160,7 @@
 
     <el-dialog v-model="chmodDialogVisible" title="修改权限" width="450px">
       <el-form>
-        <el-form-item label="权限值 (八进制)">
-          <el-input v-model="chmodValue" placeholder="例如 755" />
-        </el-form-item>
+        <el-form-item label="权限值 (八进制)"><el-input v-model="chmodValue" placeholder="例如 755" /></el-form-item>
         <el-form-item label="详细权限">
           <el-checkbox-group v-model="chmodChecks">
             <div style="margin-bottom: 8px;"><strong>所有者：</strong><el-checkbox label="owner-read">读</el-checkbox><el-checkbox label="owner-write">写</el-checkbox><el-checkbox label="owner-exec">执行</el-checkbox></div>
@@ -195,10 +169,7 @@
           </el-checkbox-group>
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="chmodDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="confirmChmod">确定</el-button>
-      </template>
+      <template #footer><el-button @click="chmodDialogVisible = false">取消</el-button><el-button type="primary" @click="confirmChmod">确定</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="confirmOverwriteVisible" title="文件已存在" width="450px" :close-on-click-modal="false">
@@ -209,60 +180,30 @@
         <el-radio label="skip">跳过</el-radio>
         <el-radio label="cancel">取消上传</el-radio>
       </el-radio-group>
-      <div style="margin-top: 16px;">
-        <el-checkbox v-model="alwaysSameAction">总是这样做（不再询问）</el-checkbox>
-      </div>
-      <template #footer>
-        <el-button @click="cancelOverwrite">取消</el-button>
-        <el-button type="primary" @click="confirmOverwrite">确定</el-button>
-      </template>
+      <div style="margin-top: 16px;"><el-checkbox v-model="alwaysSameAction">总是这样做（不再询问）</el-checkbox></div>
+      <template #footer><el-button @click="cancelOverwrite">取消</el-button><el-button type="primary" @click="confirmOverwrite">确定</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="editDialogVisible" title="编辑文件" width="80%" top="5vh" @close="closeEditor">
-      <div class="editor-container">
-        <textarea ref="editorTextarea" v-model="editContent" class="code-editor" :style="{ height: '60vh', fontFamily: 'monospace', fontSize: '14px' }"></textarea>
-      </div>
-      <template #footer>
-        <el-button @click="editDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveFileContent">保存</el-button>
-      </template>
+      <div class="editor-container"><textarea ref="editorTextarea" v-model="editContent" class="code-editor" :style="{ height: '60vh', fontFamily: 'monospace', fontSize: '14px' }"></textarea></div>
+      <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" @click="saveFileContent">保存</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="renameDialogVisible" title="重命名" width="400px">
-      <el-form>
-        <el-form-item label="新名称">
-          <el-input v-model="newName" placeholder="请输入新名称" autocomplete="off" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="renameDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="confirmRename">确定</el-button>
-      </template>
+      <el-form><el-form-item label="新名称"><el-input v-model="newName" placeholder="请输入新名称" autocomplete="off" /></el-form-item></el-form>
+      <template #footer><el-button @click="renameDialogVisible = false">取消</el-button><el-button type="primary" @click="confirmRename">确定</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="favoriteDialogVisible" :title="isEditingFavorite ? '编辑收藏' : '添加收藏'" width="480px" destroy-on-close>
       <el-form :model="favoriteForm" label-width="80px">
-        <el-form-item label="名称">
-          <el-input v-model="favoriteForm.name" placeholder="收藏名称" />
-        </el-form-item>
-        <el-form-item label="路径">
-          <el-input v-model="favoriteForm.path" placeholder="服务器路径" />
-        </el-form-item>
+        <el-form-item label="名称"><el-input v-model="favoriteForm.name" placeholder="收藏名称" /></el-form-item>
+        <el-form-item label="路径"><el-input v-model="favoriteForm.path" placeholder="服务器路径" /></el-form-item>
         <el-form-item label="类型">
-          <el-switch
-              v-model="favoriteForm.isPublic"
-              active-text="公用"
-              inactive-text="私有"
-              :active-value="true"
-              :inactive-value="false"
-          />
+          <el-switch v-model="favoriteForm.isPublic" active-text="公用" inactive-text="私有" :active-value="true" :inactive-value="false" />
           <div class="form-tip">公用收藏对所有连接可见，私有收藏仅当前连接可见</div>
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="favoriteDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveFavorite">{{ isEditingFavorite ? '更新' : '添加' }}</el-button>
-      </template>
+      <template #footer><el-button @click="favoriteDialogVisible = false">取消</el-button><el-button type="primary" @click="saveFavorite">{{ isEditingFavorite ? '更新' : '添加' }}</el-button></template>
     </el-dialog>
   </div>
 </template>
@@ -322,7 +263,6 @@ const navigateToSafePath = async (targetPath: string): Promise<boolean> => {
     return false
   }
   isNavigating.value = true
-
   const requestId = ++sftpRequestId
   return new Promise<boolean>((resolve) => {
     pendingRequests.set(requestId, {
@@ -338,14 +278,7 @@ const navigateToSafePath = async (targetPath: string): Promise<boolean> => {
         resolve(false)
       }
     })
-
-    props.ws!.send(JSON.stringify({
-      type: 'sftp-list',
-      sessionId: props.sessionId,
-      path: targetPath,
-      requestId
-    }))
-
+    props.ws!.send(JSON.stringify({ type: 'sftp-list', sessionId: props.sessionId, path: targetPath, requestId }))
     setTimeout(() => {
       if (pendingRequests.has(requestId)) {
         pendingRequests.delete(requestId)
@@ -357,35 +290,24 @@ const navigateToSafePath = async (targetPath: string): Promise<boolean> => {
   })
 }
 
-const navigateToPath = async (idx: number) => {
-  if (currentPath.value === null) return
-  await navigateToSafePath(getPathFromIndex(idx))
-}
-
+const navigateToPath = async (idx: number) => { if (currentPath.value !== null) await navigateToSafePath(getPathFromIndex(idx)) }
 const goUpDirectory = async () => {
   if (currentPath.value === null || currentPath.value === '/') return
   const parentPath = currentPath.value.substring(0, currentPath.value.lastIndexOf('/')) || '/'
   await navigateToSafePath(parentPath)
 }
-
 const goToPathSafe = async () => {
   if (currentPath.value === null) return
   const { value: inputPath } = await ElMessageBox.prompt('请输入服务器路径（绝对路径）', '跳转到路径', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    inputValue: currentPath.value,
-    inputPattern: /^\//,
-    inputErrorMessage: '路径必须以 / 开头'
+    confirmButtonText: '确定', cancelButtonText: '取消', inputValue: currentPath.value,
+    inputPattern: /^\//, inputErrorMessage: '路径必须以 / 开头'
   })
   if (inputPath) {
     let newPath = inputPath.trim()
-    if (newPath !== '/' && newPath.endsWith('/')) {
-      newPath = newPath.slice(0, -1)
-    }
+    if (newPath !== '/' && newPath.endsWith('/')) newPath = newPath.slice(0, -1)
     await navigateToSafePath(newPath)
   }
 }
-
 const copyPath = () => {
   if (currentPath.value === null) return
   navigator.clipboard.writeText(currentPath.value === '/' ? '/' : currentPath.value)
@@ -394,28 +316,15 @@ const copyPath = () => {
 
 const colWidths = ref({ name: 300, size: 100, time: 160, perm: 180 })
 const gridTemplateCols = computed(() => `${colWidths.value.name}px ${colWidths.value.size}px ${colWidths.value.time}px ${colWidths.value.perm}px`)
-
-let resizingColumn: string | null = null
-let startX = 0
-let startWidth = 0
-
+let resizingColumn: string | null = null, startX = 0, startWidth = 0
 const loadColWidths = async () => {
   const config = await getConfig()
-  if (config.sftp_col_widths) {
-    colWidths.value = { ...colWidths.value, ...config.sftp_col_widths }
-  }
+  if (config.sftp_col_widths) colWidths.value = { ...colWidths.value, ...config.sftp_col_widths }
 }
-const saveColWidths = async () => {
-  await saveConfigKey('sftp_col_widths', colWidths.value)
-}
-
+const saveColWidths = async () => await saveConfigKey('sftp_col_widths', colWidths.value)
 const startResize = (col: string, e: MouseEvent) => {
-  resizingColumn = col
-  startX = e.clientX
-  startWidth = colWidths.value[col as keyof typeof colWidths.value]
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
-  e.preventDefault()
+  resizingColumn = col; startX = e.clientX; startWidth = colWidths.value[col as keyof typeof colWidths.value]
+  document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp); e.preventDefault()
 }
 const onMouseMove = (e: MouseEvent) => {
   if (!resizingColumn) return
@@ -424,13 +333,7 @@ const onMouseMove = (e: MouseEvent) => {
   if (newWidth > 600) newWidth = 600
   colWidths.value[resizingColumn as keyof typeof colWidths.value] = newWidth
 }
-const onMouseUp = () => {
-  resizingColumn = null
-  document.removeEventListener('mousemove', onMouseMove)
-  document.removeEventListener('mouseup', onMouseUp)
-  saveColWidths()
-  nextTick(() => {})
-}
+const onMouseUp = () => { resizingColumn = null; document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); saveColWidths(); nextTick(() => {}) }
 
 type SortField = 'name' | 'size' | 'modifyTime'
 const sortField = ref<SortField>('name')
@@ -443,16 +346,11 @@ const handleSort = (field: SortField) => {
 const getSortIcon = (field: SortField) => sortField.value === field ? (sortOrder.value === 'asc' ? '▲' : '▼') : ''
 const loadSortState = async () => {
   const config = await getConfig()
-  if (config.sftp_sort) {
-    sortField.value = config.sftp_sort.field || 'name'
-    sortOrder.value = config.sftp_sort.order || 'asc'
-  }
+  if (config.sftp_sort) { sortField.value = config.sftp_sort.field || 'name'; sortOrder.value = config.sftp_sort.order || 'asc' }
 }
 const sortedFiles = computed(() => {
   let list = filteredFiles.value
-  if (!showHidden.value) {
-    list = list.filter(f => !f.name.startsWith('.'))
-  }
+  if (!showHidden.value) list = list.filter(f => !f.name.startsWith('.'))
   const field = sortField.value, order = sortOrder.value
   list.sort((a, b) => {
     let aVal = field === 'name' ? a.name : (field === 'size' ? a.size : a.modifyTime)
@@ -464,49 +362,29 @@ const sortedFiles = computed(() => {
   return list
 })
 
-const contextMenuVisible = ref(false)
-const contextMenuX = ref(0)
-const contextMenuY = ref(0)
-const contextMenuFile = ref<any>(null)
-const chmodDialogVisible = ref(false)
-const chmodValue = ref('755')
-const chmodChecks = ref<string[]>([])
-
+const contextMenuVisible = ref(false); const contextMenuX = ref(0); const contextMenuY = ref(0); const contextMenuFile = ref<any>(null)
+const chmodDialogVisible = ref(false); const chmodValue = ref('755'); const chmodChecks = ref<string[]>([])
 const dragOverFolder = ref<any>(null)
 
-const confirmOverwriteVisible = ref(false)
-const pendingFile = ref<any>(null)
-const pendingTargetDir = ref<string>('')
-const overwriteAction = ref<'overwrite' | 'skip' | 'cancel'>('overwrite')
-const alwaysSameAction = ref(false)
+// 覆盖确认相关（移除永久偏好，只保留批次临时策略）
+const confirmOverwriteVisible = ref(false); const pendingFile = ref<any>(null); const pendingTargetDir = ref<string>(''); const pendingRemoteFileName = ref<string>('')
+const overwriteAction = ref<'overwrite' | 'skip' | 'cancel'>('overwrite'); const alwaysSameAction = ref(false)
 let resolveOverwrite: ((action: 'overwrite' | 'skip' | 'cancel') => void) | null = null
-
-const overwritePreferences = ref<Record<string, 'overwrite' | 'skip'>>({})
-
-const loadOverwritePrefs = async () => {
-  const config = await getConfig()
-  overwritePreferences.value = config.sftp_overwrite_prefs || {}
-}
-const saveOverwritePrefs = async () => {
-  await saveConfigKey('sftp_overwrite_prefs', overwritePreferences.value)
-}
+const batchOverwriteAction = ref<'overwrite' | 'skip' | null>(null) // 本次批次的全局策略
 
 const checkFileExists = async (targetPath: string): Promise<boolean> => {
   try {
-    const response = await fetch('/api/sftp/exists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: props.sessionId, filePath: targetPath })
-    })
+    const response = await fetch('/api/sftp/exists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: props.sessionId, filePath: targetPath }) })
     const data = await response.json()
     return data.success && data.exists
   } catch (err) { return false }
 }
 
-const showOverwriteConfirm = (file: File, targetDir: string): Promise<'overwrite' | 'skip' | 'cancel'> => {
+const showOverwriteConfirm = (file: File, targetDir: string, remoteFileName: string): Promise<'overwrite' | 'skip' | 'cancel'> => {
   return new Promise((resolve) => {
     pendingFile.value = file
     pendingTargetDir.value = targetDir
+    pendingRemoteFileName.value = remoteFileName
     overwriteAction.value = 'overwrite'
     alwaysSameAction.value = false
     resolveOverwrite = resolve
@@ -517,94 +395,172 @@ const showOverwriteConfirm = (file: File, targetDir: string): Promise<'overwrite
 const confirmOverwrite = () => {
   const action = overwriteAction.value
   if (alwaysSameAction.value && (action === 'overwrite' || action === 'skip')) {
-    overwritePreferences.value[`${pendingTargetDir.value}|${pendingFile.value.name}`] = action
-    saveOverwritePrefs()
+    // 设置本次批次的全局策略（所有后续文件适用）
+    batchOverwriteAction.value = action
   }
   if (resolveOverwrite) resolveOverwrite(action)
   confirmOverwriteVisible.value = false
 }
+const cancelOverwrite = () => { if (resolveOverwrite) resolveOverwrite('cancel'); confirmOverwriteVisible.value = false }
 
-const cancelOverwrite = () => {
-  if (resolveOverwrite) resolveOverwrite('cancel')
-  confirmOverwriteVisible.value = false
-}
-
-const doUpload = async (file: File, targetDir: string): Promise<boolean> => {
+async function doUpload(file: File, remoteDir: string, remoteFileName: string): Promise<boolean> {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('sessionId', props.sessionId)
-  formData.append('remotePath', targetDir)
+  formData.append('remotePath', remoteDir)
+  formData.append('remoteFileName', remoteFileName)
   const transferId = Date.now() + Math.random()
-  transfers.value.push({ id: transferId, name: file.name, progress: 0, status: 'uploading' })
+  transfers.value.push({ id: transferId, name: remoteFileName, progress: 0, status: 'uploading' })
   try {
     const response = await fetch('/api/sftp/upload', { method: 'POST', body: formData })
     const result = await response.json()
     if (result.success) {
       const transfer = transfers.value.find(t => t.id === transferId)
       if (transfer) { transfer.progress = 100; transfer.status = 'success' }
-      ElMessage.success(`上传成功: ${file.name}`)
-      if (targetDir === currentPath.value) refreshFileList()
+      ElMessage.success(`上传成功: ${remoteFileName}`)
+      if (remoteDir === currentPath.value) refreshFileList()
       return true
     } else throw new Error(result.error)
   } catch (err) {
     const transfer = transfers.value.find(t => t.id === transferId)
     if (transfer) transfer.status = 'error'
-    ElMessage.error(`上传失败: ${file.name} - ${err.message}`)
+    ElMessage.error(`上传失败: ${remoteFileName} - ${err.message}`)
     return false
   }
 }
 
-const uploadFileToPath = async (file: File, targetDir: string): Promise<boolean> => {
-  if (currentPath.value === null) return false
-  const targetFilePath = targetDir === '/' ? `/${file.name}` : `${targetDir}/${file.name}`
-  const exists = await checkFileExists(targetFilePath)
-  if (exists) {
-    const prefKey = `${targetDir}|${file.name}`
-    const savedAction = overwritePreferences.value[prefKey]
-    if (savedAction === 'overwrite') return await doUpload(file, targetDir)
-    if (savedAction === 'skip') { ElMessage.info(`跳过已存在文件: ${file.name}`); return false }
-    const action = await showOverwriteConfirm(file, targetDir)
-    if (action === 'overwrite') return await doUpload(file, targetDir)
-    return false
-  } else {
-    return await doUpload(file, targetDir)
+// 通用文件上传：优先使用批次策略，否则弹框询问
+async function uploadFileToRemote(file: File, remoteDir: string, remoteFileName: string): Promise<boolean> {
+  const fullRemotePath = remoteDir === '/' ? `/${remoteFileName}` : `${remoteDir}/${remoteFileName}`
+  const exists = await checkFileExists(fullRemotePath)
+  if (!exists) {
+    return doUpload(file, remoteDir, remoteFileName)
   }
+  // 文件已存在，检查批次策略
+  if (batchOverwriteAction.value) {
+    if (batchOverwriteAction.value === 'overwrite') {
+      return doUpload(file, remoteDir, remoteFileName)
+    } else {
+      ElMessage.info(`跳过已存在文件: ${remoteFileName}`)
+      return false
+    }
+  }
+  // 没有批次策略，弹框询问
+  const action = await showOverwriteConfirm(file, remoteDir, remoteFileName)
+  if (action === 'overwrite') return doUpload(file, remoteDir, remoteFileName)
+  return false
+}
+
+// 确保远程目录存在（如果目录已存在，不报错）
+async function ensureRemoteDirectory(dirPath: string): Promise<void> {
+  if (dirPath === '/' || dirPath === '') return
+  const parts = dirPath.split('/').filter(p => p)
+  let currentPath = ''
+  for (const part of parts) {
+    currentPath += `/${part}`
+    try {
+      await new Promise((resolve, reject) => {
+        if (!props.ws || props.ws.readyState !== WebSocket.OPEN) reject(new Error('连接断开'))
+        const requestId = ++sftpRequestId
+        const handler = (event: MessageEvent) => {
+          const msg = JSON.parse(event.data)
+          if (msg.type === 'sftp-mkdir-response' && msg.requestId === requestId) {
+            props.ws!.removeEventListener('message', handler)
+            if (msg.success) resolve(true)
+            else if (msg.error && (msg.error.includes('exists') || msg.error.includes('存在'))) resolve(true)
+            else reject(new Error(msg.error))
+          }
+        }
+        props.ws!.addEventListener('message', handler)
+        props.ws!.send(JSON.stringify({ type: 'sftp-mkdir', sessionId: props.sessionId, path: currentPath, requestId }))
+        setTimeout(() => { props.ws!.removeEventListener('message', handler); reject(new Error('创建目录超时')) }, 10000)
+      })
+    } catch (err) {
+      if (!err.message.includes('exists')) throw err
+    }
+  }
+}
+
+async function traverseFileEntry(entry: any, relativePath: string, filesList: Array<{ file: File; relPath: string }>): Promise<void> {
+  if (entry.isFile) {
+    const file = await new Promise<File>((resolve) => entry.file(resolve))
+    filesList.push({ file, relPath: relativePath })
+  } else if (entry.isDirectory) {
+    const dirReader = entry.createReader()
+    const entries = await new Promise<any[]>((resolve) => dirReader.readEntries(resolve))
+    for (const childEntry of entries) {
+      await traverseFileEntry(childEntry, relativePath ? `${relativePath}/${childEntry.name}` : childEntry.name, filesList)
+    }
+  }
+}
+
+// 拖拽上传（支持文件夹递归）
+const onDrop = async (e: DragEvent) => {
+  e.preventDefault()
+  if (currentPath.value === null) return
+  // 重置批次策略
+  batchOverwriteAction.value = null
+
+  const targetFolder = dragOverFolder.value
+  let targetPath = targetFolder
+      ? (currentPath.value === '/' ? `/${targetFolder.name}` : `${currentPath.value}/${targetFolder.name}`)
+      : currentPath.value
+
+  const items = e.dataTransfer?.items
+  if (!items) return
+
+  const filesToUpload: Array<{ file: File; relPath: string }> = []
+
+  for (let i = 0; i < items.length; i++) {
+    const entry = items[i].webkitGetAsEntry()
+    if (!entry) continue
+
+    // 关键修改：如果是文件夹，传入文件夹名作为相对路径前缀
+    if (entry.isDirectory) {
+      await traverseFileEntry(entry, entry.name, filesToUpload)
+    } else {
+      await traverseFileEntry(entry, '', filesToUpload)
+    }
+  }
+
+  if (filesToUpload.length === 0) return
+  ElMessage.info(`开始上传 ${filesToUpload.length} 个文件到 ${targetPath === '/' ? '/' : targetPath}`)
+
+  for (const { file, relPath } of filesToUpload) {
+    const remoteDir = relPath.includes('/')
+        ? (targetPath === '/' ? `/${relPath.substring(0, relPath.lastIndexOf('/'))}` : `${targetPath}/${relPath.substring(0, relPath.lastIndexOf('/'))}`)
+        : targetPath
+    const remoteFileName = relPath.includes('/') ? relPath.substring(relPath.lastIndexOf('/') + 1) : file.name
+    await ensureRemoteDirectory(remoteDir)
+    await uploadFileToRemote(file, remoteDir, remoteFileName)
+  }
+  refreshFileList()
+  dragOverFolder.value = null
 }
 
 const onDragEnter = (e: DragEvent) => { e.preventDefault() }
 const onDragOver = (e: DragEvent) => { e.preventDefault() }
-const onDragEnterFolder = (file: any, e: DragEvent) => {
-  if (file.type === 'directory') { dragOverFolder.value = file; e.stopPropagation() }
-}
+const onDragEnterFolder = (file: any, e: DragEvent) => { if (file.type === 'directory') { dragOverFolder.value = file; e.stopPropagation() } }
 const onDragLeaveFolder = () => { dragOverFolder.value = null }
 const onDragEnd = () => { dragOverFolder.value = null }
 
-const onDrop = async (e: DragEvent) => {
-  e.preventDefault()
-  if (currentPath.value === null) return
-  const targetFolder = dragOverFolder.value
-  const targetPath = targetFolder ? (currentPath.value === '/' ? `/${targetFolder.name}` : `${currentPath.value}/${targetFolder.name}`) : currentPath.value
-  const droppedFiles = e.dataTransfer?.files
-  if (!droppedFiles || droppedFiles.length === 0) return
-  ElMessage.info(`开始上传 ${droppedFiles.length} 个文件到 ${targetPath === '/' ? '/' : targetPath}`)
-  for (let i = 0; i < droppedFiles.length; i++) {
-    await uploadFileToPath(droppedFiles[i], targetPath)
-  }
-  dragOverFolder.value = null
-  if (targetPath === currentPath.value) refreshFileList()
-}
-
+// 点击上传按钮（只上传普通文件，不递归）
 const uploadFile = () => {
   if (!props.sshReady) { ElMessage.warning('请等待 SSH 连接就绪'); return }
   if (currentPath.value === null) { ElMessage.warning('目录尚未同步'); return }
+  // 重置批次策略
+  batchOverwriteAction.value = null
+
   const input = document.createElement('input')
   input.type = 'file'
   input.multiple = true
   input.onchange = async (e: any) => {
-    const files = e.target.files
-    if (!files) return
-    ElMessage.info(`开始上传 ${files.length} 个文件到当前目录`)
-    for (const file of files) await uploadFileToPath(file, currentPath.value!)
+    const filesList = e.target.files
+    if (!filesList) return
+    ElMessage.info(`开始上传 ${filesList.length} 个文件到当前目录`)
+    for (const file of filesList) {
+      await uploadFileToRemote(file, currentPath.value!, file.name)
+    }
     refreshFileList()
   }
   input.click()
@@ -615,33 +571,19 @@ const createFile = async () => {
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
   try {
     const { value: fileName } = await ElMessageBox.prompt('请输入文件名（例如：script.sh）', '新建文件', {
-      confirmButtonText: '创建',
-      cancelButtonText: '取消',
-      inputPattern: /^[^/\\:*?"<>|]+$/,
-      inputErrorMessage: '文件名不能包含特殊字符 / \\ : * ? " < > |'
+      confirmButtonText: '创建', cancelButtonText: '取消',
+      inputPattern: /^[^/\\:*?"<>|]+$/, inputErrorMessage: '文件名不能包含特殊字符 / \\ : * ? " < > |'
     })
     if (!fileName) return
     const fullPath = currentPath.value === '/' ? `/${fileName}` : `${currentPath.value}/${fileName}`
-    const response = await fetch('/api/sftp/create-file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: props.sessionId, filePath: fullPath })
-    })
+    const response = await fetch('/api/sftp/create-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: props.sessionId, filePath: fullPath }) })
     const result = await response.json()
-    if (result.success) {
-      ElMessage.success(`文件 ${fileName} 创建成功`)
-      refreshFileList()
-    } else {
-      ElMessage.error(`创建失败: ${result.error}`)
-    }
+    if (result.success) { ElMessage.success(`文件 ${fileName} 创建成功`); refreshFileList() }
+    else ElMessage.error(`创建失败: ${result.error}`)
   } catch (err) { if (err !== 'cancel') ElMessage.error('创建文件失败') }
 }
 
-const editDialogVisible = ref(false)
-const editContent = ref('')
-const editingFilePath = ref('')
-const editorTextarea = ref<HTMLTextAreaElement | null>(null)
-
+const editDialogVisible = ref(false); const editContent = ref(''); const editingFilePath = ref(''); const editorTextarea = ref<HTMLTextAreaElement | null>(null)
 const openEditor = async (file: any) => {
   if (currentPath.value === null) return
   if (file.type === 'directory') { ElMessage.warning('不能编辑文件夹'); return }
@@ -653,79 +595,36 @@ const openEditor = async (file: any) => {
     const text = await response.text()
     editContent.value = text
     editDialogVisible.value = true
-  } catch (err) {
-    ElMessage.error('读取文件失败: ' + err.message)
-  }
+  } catch (err) { ElMessage.error('读取文件失败: ' + err.message) }
 }
-
 const saveFileContent = async () => {
   if (currentPath.value === null) return
   const blob = new Blob([editContent.value], { type: 'text/plain;charset=utf-8' })
   const fileName = editingFilePath.value.split('/').pop() || 'file'
   const file = new File([blob], fileName, { type: 'text/plain' })
   const dirPath = editingFilePath.value.split('/').slice(0, -1).join('/') || '/'
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('sessionId', props.sessionId)
-  formData.append('remotePath', dirPath)
-  try {
-    const response = await fetch('/api/sftp/upload', { method: 'POST', body: formData })
-    const result = await response.json()
-    if (result.success) {
-      ElMessage.success('保存成功')
-      editDialogVisible.value = false
-      refreshFileList()
-    } else {
-      throw new Error(result.error)
-    }
-  } catch (err) {
-    ElMessage.error('保存失败: ' + err.message)
-  }
+  // 单个文件保存，重置批次策略（可选，但无影响）
+  batchOverwriteAction.value = null
+  await uploadFileToRemote(file, dirPath, fileName)
+  editDialogVisible.value = false
+  refreshFileList()
 }
+const closeEditor = () => { editContent.value = ''; editingFilePath.value = '' }
 
-const closeEditor = () => {
-  editContent.value = ''
-  editingFilePath.value = ''
-}
-
-const renameDialogVisible = ref(false)
-const newName = ref('')
-const renameTarget = ref<any>(null)
-
-const renameContextFile = () => {
-  if (!contextMenuFile.value) return
-  renameTarget.value = contextMenuFile.value
-  newName.value = contextMenuFile.value.name
-  renameDialogVisible.value = true
-  closeContextMenu()
-}
-
+const renameDialogVisible = ref(false); const newName = ref(''); const renameTarget = ref<any>(null)
+const renameContextFile = () => { if (!contextMenuFile.value) return; renameTarget.value = contextMenuFile.value; newName.value = contextMenuFile.value.name; renameDialogVisible.value = true; closeContextMenu() }
 const confirmRename = async () => {
-  if (currentPath.value === null) return
-  if (!renameTarget.value) return
+  if (currentPath.value === null || !renameTarget.value) return
   const newNameTrim = newName.value.trim()
-  if (!newNameTrim) {
-    ElMessage.warning('名称不能为空')
-    return
-  }
-  if (newNameTrim === renameTarget.value.name) {
-    renameDialogVisible.value = false
-    return
-  }
+  if (!newNameTrim) { ElMessage.warning('名称不能为空'); return }
+  if (newNameTrim === renameTarget.value.name) { renameDialogVisible.value = false; return }
   const oldPath = currentPath.value === '/' ? `/${renameTarget.value.name}` : `${currentPath.value}/${renameTarget.value.name}`
   const newPath = currentPath.value === '/' ? `/${newNameTrim}` : `${currentPath.value}/${newNameTrim}`
   if (props.ws && props.ws.readyState === WebSocket.OPEN) {
-    props.ws.send(JSON.stringify({
-      type: 'sftp-rename',
-      sessionId: props.sessionId,
-      oldPath: oldPath,
-      newPath: newPath
-    }))
+    props.ws.send(JSON.stringify({ type: 'sftp-rename', sessionId: props.sessionId, oldPath, newPath }))
     renameDialogVisible.value = false
     ElMessage.info('正在重命名...')
-  } else {
-    ElMessage.error('连接已断开')
-  }
+  } else ElMessage.error('连接已断开')
 }
 
 const formatPermissions = (file: any): string => {
@@ -742,149 +641,88 @@ const filteredFiles = computed(() => {
   if (!searchText.value) return files.value
   return files.value.filter(f => f.name.toLowerCase().includes(searchText.value.toLowerCase()))
 })
-
-const formatSize = (bytes: number) => {
-  if (bytes === 0) return '0 B'
-  const k = 1024, sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
+const formatSize = (bytes: number) => { if (bytes === 0) return '0 B'; const k = 1024, sizes = ['B','KB','MB','GB']; const i = Math.floor(Math.log(bytes)/Math.log(k)); return parseFloat((bytes/Math.pow(k,i)).toFixed(2)) + ' ' + sizes[i] }
 const formatTime = (ts: number) => ts ? new Date(ts).toLocaleString() : '-'
-
-const refreshFileList = () => {
-  if (!props.sshReady || !props.ws || props.ws.readyState !== WebSocket.OPEN || currentPath.value === null) return
-  props.ws.send(JSON.stringify({ type: 'sftp-list', sessionId: props.sessionId, path: currentPath.value }))
-}
-
+const refreshFileList = () => { if (props.sshReady && props.ws && props.ws.readyState === WebSocket.OPEN && currentPath.value !== null) props.ws.send(JSON.stringify({ type: 'sftp-list', sessionId: props.sessionId, path: currentPath.value })) }
 const handleRowClick = (event: MouseEvent, file: any) => { selectedFile.value = file }
-
 const handleNameClick = async (file: any) => {
   if (file.type === 'directory') {
     selectedFile.value = file
     if (currentPath.value === null) return
     const newPath = currentPath.value === '/' ? `/${file.name}` : `${currentPath.value}/${file.name}`
     await navigateToSafePath(newPath)
-  } else {
-    selectedFile.value = file
-  }
+  } else selectedFile.value = file
 }
 
 const downloadSelectedFile = async () => {
-  if (currentPath.value === null) return
-  if (!selectedFile.value) { ElMessage.warning('请先选中一个文件或文件夹'); return }
+  if (currentPath.value === null || !selectedFile.value) { ElMessage.warning('请先选中一个文件或文件夹'); return }
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
   const remotePath = currentPath.value === '/' ? `/${selectedFile.value.name}` : `${currentPath.value}/${selectedFile.value.name}`
   if (selectedFile.value.type === 'directory') {
     const loading = ElMessage({ message: '正在打包文件夹，请稍候...', duration: 0, icon: 'Loading' })
     try {
-      const response = await fetch('/api/sftp/download-folder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: props.sessionId, folderPath: remotePath })
-      })
+      const response = await fetch('/api/sftp/download-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: props.sessionId, folderPath: remotePath }) })
       if (!response.ok) throw new Error(await response.text())
       const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${selectedFile.value.name}.zip`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${selectedFile.value.name}.zip`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
       ElMessage.success('下载成功')
-    } catch (err) { ElMessage.error('打包下载失败: ' + err.message) }
-    finally { loading.close() }
+    } catch (err) { ElMessage.error('打包下载失败: ' + err.message) } finally { loading.close() }
   } else {
     const downloadUrl = `/api/sftp/download?sessionId=${props.sessionId}&filePath=${encodeURIComponent(remotePath)}`
-    const a = document.createElement('a')
-    a.href = downloadUrl
-    a.download = selectedFile.value.name
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    const a = document.createElement('a'); a.href = downloadUrl; a.download = selectedFile.value.name; document.body.appendChild(a); a.click(); document.body.removeChild(a)
   }
 }
-
 const createFolder = async () => {
   if (currentPath.value === null) return
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
   try {
-    const { value } = await ElMessageBox.prompt('请输入文件夹名称', '新建文件夹', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消'
-    })
+    const { value } = await ElMessageBox.prompt('请输入文件夹名称', '新建文件夹', { confirmButtonText: '确定', cancelButtonText: '取消' })
     if (value) {
       const newPath = currentPath.value === '/' ? `/${value}` : `${currentPath.value}/${value}`
-      if (props.ws && props.ws.readyState === WebSocket.OPEN) {
-        props.ws.send(JSON.stringify({ type: 'sftp-mkdir', sessionId: props.sessionId, path: newPath }))
-      }
+      if (props.ws && props.ws.readyState === WebSocket.OPEN) props.ws.send(JSON.stringify({ type: 'sftp-mkdir', sessionId: props.sessionId, path: newPath }))
     }
   } catch (error) { /* 取消 */ }
 }
-
 const deleteFile = async () => {
-  if (currentPath.value === null) return
-  if (!selectedFile.value) { ElMessage.warning('请选择一个文件或文件夹'); return }
+  if (currentPath.value === null || !selectedFile.value) { ElMessage.warning('请选择一个文件或文件夹'); return }
   if (!props.sshReady) { ElMessage.warning('SSH 未就绪'); return }
   try {
     await ElMessageBox.confirm(`确定要删除 ${selectedFile.value.name} 吗？`, '提示', { type: 'warning' })
     const remotePath = currentPath.value === '/' ? `/${selectedFile.value.name}` : `${currentPath.value}/${selectedFile.value.name}`
-    if (props.ws && props.ws.readyState === WebSocket.OPEN) {
-      props.ws.send(JSON.stringify({ type: 'sftp-delete', sessionId: props.sessionId, path: remotePath }))
-    }
+    if (props.ws && props.ws.readyState === WebSocket.OPEN) props.ws.send(JSON.stringify({ type: 'sftp-delete', sessionId: props.sessionId, path: remotePath }))
   } catch (error) { /* 取消 */ }
 }
-
 const clearTransfers = () => { transfers.value = [] }
 
-const showContextMenu = (event: MouseEvent, file: any) => {
-  contextMenuFile.value = file
-  contextMenuVisible.value = true
-  contextMenuX.value = event.clientX
-  contextMenuY.value = event.clientY
-  event.preventDefault()
-}
-const editContextFile = () => {
-  if (contextMenuFile.value) openEditor(contextMenuFile.value)
-  contextMenuVisible.value = false
-}
+const showContextMenu = (event: MouseEvent, file: any) => { contextMenuFile.value = file; contextMenuVisible.value = true; contextMenuX.value = event.clientX; contextMenuY.value = event.clientY; event.preventDefault() }
+const editContextFile = () => { if (contextMenuFile.value) openEditor(contextMenuFile.value); contextMenuVisible.value = false }
 const closeContextMenu = () => { contextMenuVisible.value = false }
 const chmodFile = () => {
   if (!contextMenuFile.value) return
   const perm = contextMenuFile.value.permissions
   let octal = (perm && perm.length >= 3) ? perm.slice(-3) : '755'
   chmodValue.value = octal
+  const updateChecksFromOctal = (octal: string) => {
+    const num = parseInt(octal, 8); const owner = (num >> 6) & 7, group = (num >> 3) & 7, other = num & 7; const checks: string[] = []
+    if (owner & 4) checks.push('owner-read'); if (owner & 2) checks.push('owner-write'); if (owner & 1) checks.push('owner-exec')
+    if (group & 4) checks.push('group-read'); if (group & 2) checks.push('group-write'); if (group & 1) checks.push('group-exec')
+    if (other & 4) checks.push('other-read'); if (other & 2) checks.push('other-write'); if (other & 1) checks.push('other-exec')
+    chmodChecks.value = checks
+  }
   updateChecksFromOctal(octal)
   chmodDialogVisible.value = true
   closeContextMenu()
 }
-const updateChecksFromOctal = (octal: string) => {
-  const num = parseInt(octal, 8)
-  const owner = (num >> 6) & 7, group = (num >> 3) & 7, other = num & 7
-  const checks: string[] = []
-  if (owner & 4) checks.push('owner-read'); if (owner & 2) checks.push('owner-write'); if (owner & 1) checks.push('owner-exec')
-  if (group & 4) checks.push('group-read'); if (group & 2) checks.push('group-write'); if (group & 1) checks.push('group-exec')
-  if (other & 4) checks.push('other-read'); if (other & 2) checks.push('other-write'); if (other & 1) checks.push('other-exec')
-  chmodChecks.value = checks
-}
 const updateOctalFromChecks = () => {
   let owner = 0, group = 0, other = 0
-  if (chmodChecks.value.includes('owner-read')) owner += 4
-  if (chmodChecks.value.includes('owner-write')) owner += 2
-  if (chmodChecks.value.includes('owner-exec')) owner += 1
-  if (chmodChecks.value.includes('group-read')) group += 4
-  if (chmodChecks.value.includes('group-write')) group += 2
-  if (chmodChecks.value.includes('group-exec')) group += 1
-  if (chmodChecks.value.includes('other-read')) other += 4
-  if (chmodChecks.value.includes('other-write')) other += 2
-  if (chmodChecks.value.includes('other-exec')) other += 1
+  if (chmodChecks.value.includes('owner-read')) owner += 4; if (chmodChecks.value.includes('owner-write')) owner += 2; if (chmodChecks.value.includes('owner-exec')) owner += 1
+  if (chmodChecks.value.includes('group-read')) group += 4; if (chmodChecks.value.includes('group-write')) group += 2; if (chmodChecks.value.includes('group-exec')) group += 1
+  if (chmodChecks.value.includes('other-read')) other += 4; if (chmodChecks.value.includes('other-write')) other += 2; if (chmodChecks.value.includes('other-exec')) other += 1
   chmodValue.value = `${owner}${group}${other}`
 }
 watch(chmodChecks, () => updateOctalFromChecks(), { deep: true })
 const confirmChmod = async () => {
-  if (currentPath.value === null) return
-  if (!contextMenuFile.value) return
+  if (currentPath.value === null || !contextMenuFile.value) return
   const remotePath = currentPath.value === '/' ? `/${contextMenuFile.value.name}` : `${currentPath.value}/${contextMenuFile.value.name}`
   if (props.ws && props.ws.readyState === WebSocket.OPEN) {
     props.ws.send(JSON.stringify({ type: 'sftp-chmod', sessionId: props.sessionId, path: remotePath, mode: chmodValue.value }))
@@ -900,301 +738,102 @@ const handleWebSocketMessage = (event: MessageEvent) => {
   const { type, requestId, success, files: fileList, error, path } = message
 
   if (type === 'sftp-pwd-response') {
-    if (success && path) {
-      currentPath.value = path
-      refreshFileList()
-    } else {
-      ElMessage.error('获取当前目录失败: ' + (error || '未知错误'))
-      currentPath.value = '/'
-      refreshFileList()
-    }
+    if (success && path) { currentPath.value = path; refreshFileList() }
+    else { ElMessage.error('获取当前目录失败: ' + (error || '未知错误')); currentPath.value = '/'; refreshFileList() }
     return
   }
-
   if (type === 'sftp-list-response' && requestId && pendingRequests.has(requestId)) {
     const { resolve, reject } = pendingRequests.get(requestId)!
     pendingRequests.delete(requestId)
-    if (success) {
-      resolve({ success: true, files: fileList })
-    } else {
-      reject(new Error(error || '目录访问失败'))
-    }
+    if (success) resolve({ success: true, files: fileList })
+    else reject(new Error(error || '目录访问失败'))
     return
   }
-
   switch (type) {
     case 'sftp-list-response':
-      if (success) {
-        files.value = fileList
-      } else {
-        let errorMsg = error
-        if (error && (error.includes('Channel open failure') || error.includes('无法打开 SFTP 通道'))) {
-          errorMsg = 'SFTP 通道打开失败。可能原因：SSH 服务器限制了并发会话数（MaxSessions=1）。请尝试修改服务器配置（如 /etc/ssh/sshd_config 中增加 MaxSessions 2），或使用其他 SSH 客户端单独连接。'
-        }
-        ElMessage.error('加载文件列表失败: ' + errorMsg)
-      }
+      if (success) files.value = fileList
+      else { let errorMsg = error; if (error && (error.includes('Channel open failure') || error.includes('无法打开 SFTP 通道'))) errorMsg = 'SFTP 通道打开失败。可能原因：SSH 服务器限制了并发会话数（MaxSessions=1）。请尝试修改服务器配置（如 /etc/ssh/sshd_config 中增加 MaxSessions 2），或使用其他 SSH 客户端单独连接。'; ElMessage.error('加载文件列表失败: ' + errorMsg) }
       break
-    case 'sftp-delete-response':
-      if (success) { ElMessage.success('删除成功'); refreshFileList() }
-      else ElMessage.error('删除失败')
-      break
-    case 'sftp-mkdir-response':
-      if (success) { ElMessage.success('创建成功'); refreshFileList() }
-      else ElMessage.error('创建失败')
-      break
-    case 'sftp-chmod-response':
-      if (success) { ElMessage.success('权限修改成功'); refreshFileList() }
-      else ElMessage.error('权限修改失败: ' + (error || '未知错误'))
-      break
-    case 'sftp-rename-response':
-      if (success) {
-        ElMessage.success('重命名成功')
-        refreshFileList()
-      } else {
-        ElMessage.error('重命名失败: ' + (error || '未知错误'))
-      }
-      break
+    case 'sftp-delete-response': if (success) { ElMessage.success('删除成功'); refreshFileList() } else ElMessage.error('删除失败'); break
+    case 'sftp-mkdir-response': if (success) { ElMessage.success('创建成功'); refreshFileList() } else ElMessage.error('创建失败'); break
+    case 'sftp-chmod-response': if (success) { ElMessage.success('权限修改成功'); refreshFileList() } else ElMessage.error('权限修改失败: ' + (error || '未知错误')); break
+    case 'sftp-rename-response': if (success) { ElMessage.success('重命名成功'); refreshFileList() } else ElMessage.error('重命名失败: ' + (error || '未知错误')); break
   }
 }
-
 watch(() => props.ws, (newWs, oldWs) => {
   if (oldWs && messageHandler) oldWs.removeEventListener('message', messageHandler)
-  if (newWs) {
-    messageHandler = handleWebSocketMessage;
-    newWs.addEventListener('message', messageHandler)
-  }
+  if (newWs) { messageHandler = handleWebSocketMessage; newWs.addEventListener('message', messageHandler) }
 }, { immediate: true })
 
-const fetchCurrentDirectory = () => {
-  if (!props.sshReady || !props.ws || props.ws.readyState !== WebSocket.OPEN) return
-  props.ws.send(JSON.stringify({
-    type: 'sftp-pwd',
-    sessionId: props.sessionId
-  }))
-}
+const fetchCurrentDirectory = () => { if (props.sshReady && props.ws && props.ws.readyState === WebSocket.OPEN) props.ws.send(JSON.stringify({ type: 'sftp-pwd', sessionId: props.sessionId })) }
+watch(() => props.sshReady, (ready) => { if (ready && currentPath.value === null) fetchCurrentDirectory() })
 
-watch(() => props.sshReady, (ready) => {
-  if (ready && currentPath.value === null) {
-    fetchCurrentDirectory()
-  }
-})
+const onOpenTerminalClick = () => { if (props.onOpenTerminal) props.onOpenTerminal(currentPath.value) }
 
-const onOpenTerminalClick = () => {
-  if (props.onOpenTerminal) {
-    props.onOpenTerminal(currentPath.value)
-  }
-}
-
-// ========== 收藏功能 ==========
+// 收藏功能
 const favoritesDropdownRef = ref<any>(null)
-
-interface Favorite {
-  id: string
-  name: string
-  path: string
-}
-
+interface Favorite { id: string; name: string; path: string }
 const privateFavorites = ref<{ id: string; name: string; path: string }[]>([])
 const publicFavorites = ref<{ id: string; name: string; path: string }[]>([])
-
-const allFavorites = computed(() => {
-  const priv = privateFavorites.value.map(f => ({ ...f, isPublic: false }))
-  const pub = publicFavorites.value.map(f => ({ ...f, isPublic: true }))
-  return [...pub, ...priv]
-})
-
-const favoriteDialogVisible = ref(false)
-const favoriteForm = ref({
-  name: '',
-  path: '',
-  isPublic: false
-})
-const isEditingFavorite = ref(false)
-const editingFavoriteId = ref<string | null>(null)
-const editingIsPublic = ref(false)
-
-watch(() => props.connection?.favorites, (newVal) => {
-  privateFavorites.value = newVal || []
-}, { immediate: true, deep: true })
-
-const loadPublicFavorites = async () => {
-  try {
-    const config = await getConfig()
-    publicFavorites.value = config?.sftp_public_favorites || []
-  } catch (e) {
-    console.error('加载公用收藏失败', e)
-  }
-}
-
-const savePublicFavorites = async (list: { id: string; name: string; path: string }[]) => {
-  await saveConfigKey('sftp_public_favorites', list)
-  window.dispatchEvent(new CustomEvent('public-favorites-updated'))
-}
-
-const savePrivateFavorites = async (list: { id: string; name: string; path: string }[]) => {
-  await connectionStore.updateConnection(props.connection.id, {
-    favorites: list
-  })
-}
-
-const openFavoriteDialog = () => {
-  if (currentPath.value === null) return
-  isEditingFavorite.value = false
-  editingFavoriteId.value = null
-  favoriteForm.value = {
-    name: '',
-    path: currentPath.value,
-    isPublic: false
-  }
-  favoriteDialogVisible.value = true
-}
-
-const editFavorite = (fav: Favorite) => {
-  isEditingFavorite.value = true
-  editingFavoriteId.value = fav.id
-  editingIsPublic.value = fav.isPublic
-  favoriteForm.value = {
-    name: fav.name,
-    path: fav.path,
-    isPublic: fav.isPublic
-  }
-  favoriteDialogVisible.value = true
-}
-
-const deleteFavorite = (fav: Favorite) => {
-  ElMessageBox.confirm(`确定删除收藏“${fav.name}”吗？`, '提示', { type: 'warning' })
-      .then(async () => {
-        if (fav.isPublic) {
-          const updated = publicFavorites.value.filter(f => f.id !== fav.id)
-          publicFavorites.value = updated
-          await savePublicFavorites(updated)
-        } else {
-          const updated = privateFavorites.value.filter(f => f.id !== fav.id)
-          privateFavorites.value = updated
-          await savePrivateFavorites(updated)
-        }
-        ElMessage.success('已删除')
-      })
-      .catch(() => {})
-}
-
+const allFavorites = computed(() => [...privateFavorites.value.map(f => ({ ...f, isPublic: false })), ...publicFavorites.value.map(f => ({ ...f, isPublic: true }))])
+const favoriteDialogVisible = ref(false); const favoriteForm = ref({ name: '', path: '', isPublic: false }); const isEditingFavorite = ref(false); const editingFavoriteId = ref<string | null>(null); const editingIsPublic = ref(false)
+watch(() => props.connection?.favorites, (newVal) => { privateFavorites.value = newVal || [] }, { immediate: true, deep: true })
+const loadPublicFavorites = async () => { try { const config = await getConfig(); publicFavorites.value = config?.sftp_public_favorites || [] } catch (e) { console.error('加载公用收藏失败', e) } }
+const savePublicFavorites = async (list: { id: string; name: string; path: string }[]) => { await saveConfigKey('sftp_public_favorites', list); window.dispatchEvent(new CustomEvent('public-favorites-updated')) }
+const savePrivateFavorites = async (list: { id: string; name: string; path: string }[]) => { await connectionStore.updateConnection(props.connection.id, { favorites: list }) }
+const openFavoriteDialog = () => { if (currentPath.value === null) return; isEditingFavorite.value = false; editingFavoriteId.value = null; favoriteForm.value = { name: '', path: currentPath.value, isPublic: false }; favoriteDialogVisible.value = true }
+const editFavorite = (fav: Favorite) => { isEditingFavorite.value = true; editingFavoriteId.value = fav.id; editingIsPublic.value = fav.isPublic; favoriteForm.value = { name: fav.name, path: fav.path, isPublic: fav.isPublic }; favoriteDialogVisible.value = true }
+const deleteFavorite = (fav: Favorite) => { ElMessageBox.confirm(`确定删除收藏“${fav.name}”吗？`, '提示', { type: 'warning' }).then(async () => { if (fav.isPublic) { const updated = publicFavorites.value.filter(f => f.id !== fav.id); publicFavorites.value = updated; await savePublicFavorites(updated) } else { const updated = privateFavorites.value.filter(f => f.id !== fav.id); privateFavorites.value = updated; await savePrivateFavorites(updated) } ElMessage.success('已删除') }).catch(() => {}) }
 const saveFavorite = async () => {
-  if (!favoriteForm.value.name.trim() || !favoriteForm.value.path.trim()) {
-    ElMessage.warning('名称和路径不能为空')
-    return
-  }
-
+  if (!favoriteForm.value.name.trim() || !favoriteForm.value.path.trim()) { ElMessage.warning('名称和路径不能为空'); return }
   const newIsPublic = favoriteForm.value.isPublic
-
   if (isEditingFavorite.value && editingFavoriteId.value) {
     const oldIsPublic = editingIsPublic.value
     if (oldIsPublic === newIsPublic) {
-      if (newIsPublic) {
-        const updated = publicFavorites.value.map(f =>
-            f.id === editingFavoriteId.value ? { id: f.id, name: favoriteForm.value.name, path: favoriteForm.value.path } : f
-        )
-        publicFavorites.value = updated
-        await savePublicFavorites(updated)
-      } else {
-        const updated = privateFavorites.value.map(f =>
-            f.id === editingFavoriteId.value ? { id: f.id, name: favoriteForm.value.name, path: favoriteForm.value.path } : f
-        )
-        privateFavorites.value = updated
-        await savePrivateFavorites(updated)
-      }
+      if (newIsPublic) { const updated = publicFavorites.value.map(f => f.id === editingFavoriteId.value ? { id: f.id, name: favoriteForm.value.name, path: favoriteForm.value.path } : f); publicFavorites.value = updated; await savePublicFavorites(updated) }
+      else { const updated = privateFavorites.value.map(f => f.id === editingFavoriteId.value ? { id: f.id, name: favoriteForm.value.name, path: favoriteForm.value.path } : f); privateFavorites.value = updated; await savePrivateFavorites(updated) }
     } else {
-      const newItem = {
-        id: editingFavoriteId.value,
-        name: favoriteForm.value.name,
-        path: favoriteForm.value.path
-      }
-      if (oldIsPublic) {
-        publicFavorites.value = publicFavorites.value.filter(f => f.id !== editingFavoriteId.value)
-        await savePublicFavorites(publicFavorites.value)
-      } else {
-        privateFavorites.value = privateFavorites.value.filter(f => f.id !== editingFavoriteId.value)
-        await savePrivateFavorites(privateFavorites.value)
-      }
-      if (newIsPublic) {
-        publicFavorites.value.push(newItem)
-        await savePublicFavorites(publicFavorites.value)
-      } else {
-        privateFavorites.value.push(newItem)
-        await savePrivateFavorites(privateFavorites.value)
-      }
+      const newItem = { id: editingFavoriteId.value, name: favoriteForm.value.name, path: favoriteForm.value.path }
+      if (oldIsPublic) { publicFavorites.value = publicFavorites.value.filter(f => f.id !== editingFavoriteId.value); await savePublicFavorites(publicFavorites.value) }
+      else { privateFavorites.value = privateFavorites.value.filter(f => f.id !== editingFavoriteId.value); await savePrivateFavorites(privateFavorites.value) }
+      if (newIsPublic) { publicFavorites.value.push(newItem); await savePublicFavorites(publicFavorites.value) }
+      else { privateFavorites.value.push(newItem); await savePrivateFavorites(privateFavorites.value) }
     }
     ElMessage.success('已更新')
   } else {
-    const newItem = {
-      id: uuidv4(),
-      name: favoriteForm.value.name,
-      path: favoriteForm.value.path
-    }
-    if (newIsPublic) {
-      publicFavorites.value.push(newItem)
-      await savePublicFavorites(publicFavorites.value)
-    } else {
-      privateFavorites.value.push(newItem)
-      await savePrivateFavorites(privateFavorites.value)
-    }
+    const newItem = { id: uuidv4(), name: favoriteForm.value.name, path: favoriteForm.value.path }
+    if (newIsPublic) { publicFavorites.value.push(newItem); await savePublicFavorites(publicFavorites.value) }
+    else { privateFavorites.value.push(newItem); await savePrivateFavorites(privateFavorites.value) }
     ElMessage.success('已收藏')
   }
   favoriteDialogVisible.value = false
 }
+const goToFavoritePath = (path: string) => { if (currentPath.value !== null) { navigateToSafePath(path); if (favoritesDropdownRef.value) (favoritesDropdownRef.value as any).handleClose?.() } }
+const onPublicFavoritesUpdated = () => { loadPublicFavorites() }
 
-const goToFavoritePath = (path: string) => {
-  if (currentPath.value === null) return
-  navigateToSafePath(path)
-  if (favoritesDropdownRef.value) {
-    (favoritesDropdownRef.value as any).handleClose?.()
-  }
-}
-
-const onPublicFavoritesUpdated = () => {
-  loadPublicFavorites()
-}
-
-// ========== 文件图标映射 ==========
 function getFileIcon(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() || ''
-  // 图片
-  if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico'].includes(ext)) return 'Picture'
-  // 视频
-  if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mpeg'].includes(ext)) return 'VideoCamera'
-  // 音频
-  if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a'].includes(ext)) return 'Headphone'
-  // 压缩包
-  if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'z'].includes(ext)) return 'Collection'
-  // 代码文件
-  if (['js', 'ts', 'jsx', 'tsx', 'vue', 'html', 'htm', 'css', 'scss', 'sass', 'less', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'go', 'rs', 'php', 'rb', 'swift', 'kt', 'sql', 'sh', 'bash', 'zsh', 'ps1', 'bat', 'cmd'].includes(ext)) return 'Code'
-  // 文本文件
-  if (['txt', 'md', 'markdown', 'log', 'ini', 'cfg', 'conf', 'yaml', 'yml', 'json', 'xml', 'csv'].includes(ext)) return 'Edit'
-  // PDF
+  if (['jpg','jpeg','png','gif','bmp','webp','svg','ico'].includes(ext)) return 'Picture'
+  if (['mp4','mkv','avi','mov','wmv','flv','webm','mpeg'].includes(ext)) return 'VideoCamera'
+  if (['mp3','wav','flac','aac','ogg','m4a'].includes(ext)) return 'Headphone'
+  if (['zip','rar','7z','tar','gz','bz2','xz','z'].includes(ext)) return 'Collection'
+  if (['js','ts','jsx','tsx','vue','html','htm','css','scss','sass','less','py','java','c','cpp','h','hpp','go','rs','php','rb','swift','kt','sql','sh','bash','zsh','ps1','bat','cmd'].includes(ext)) return 'Code'
+  if (['txt','md','markdown','log','ini','cfg','conf','yaml','yml','json','xml','csv'].includes(ext)) return 'Edit'
   if (ext === 'pdf') return 'Files'
-  // Office
-  if (['doc', 'docx'].includes(ext)) return 'Document'
-  if (['xls', 'xlsx', 'xlsm'].includes(ext)) return 'Grid'
-  if (['ppt', 'pptx'].includes(ext)) return 'Presentation'
-  // 可执行文件
-  if (['exe', 'msi', 'app', 'deb', 'rpm', 'sh', 'bin', 'run'].includes(ext)) return 'Monitor'
-  // 字体
-  if (['ttf', 'otf', 'woff', 'woff2', 'eot'].includes(ext)) return 'Font'
-  // 默认
-  return 'Files'
+  if (['doc','docx'].includes(ext)) return 'Document'
+  if (['xls','xlsx','xlsm'].includes(ext)) return 'Grid'
+  if (['ppt','pptx'].includes(ext)) return 'Presentation'
+  if (['exe','msi','app','deb','rpm','sh','bin','run'].includes(ext)) return 'Monitor'
+  if (['ttf','otf','woff','woff2','eot'].includes(ext)) return 'Font'
+  return 'Document'
 }
 
 onMounted(async () => {
-  await loadColWidths()
-  await loadSortState()
-  await loadOverwritePrefs()
-  await loadPublicFavorites()
-  if (props.sshReady && currentPath.value === null) {
-    fetchCurrentDirectory()
-  }
+  await loadColWidths(); await loadSortState(); await loadPublicFavorites()
+  if (props.sshReady && currentPath.value === null) fetchCurrentDirectory()
   document.addEventListener('click', closeContextMenu)
   window.addEventListener('public-favorites-updated', onPublicFavoritesUpdated)
 })
-
 onUnmounted(() => {
   if (props.ws && messageHandler) props.ws.removeEventListener('message', messageHandler)
   document.removeEventListener('click', closeContextMenu)

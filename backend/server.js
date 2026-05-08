@@ -206,28 +206,66 @@ wss.on('connection', (ws, req) => {
             ws.send(JSON.stringify({ type: 'sftp-pwd-response', sessionId, success: false, error: '会话不存在' }));
           }
           break;
-        case 'sftp-delete':
-          if (sessionId && sessions.has(sessionId)) {
-            const result = await sshManager.handleSFTPDelete(sessionId, payload.path);
-            ws.send(JSON.stringify({ type: 'sftp-delete-response', sessionId, success: result }));
-          }
-          break;
         case 'sftp-mkdir':
           if (sessionId && sessions.has(sessionId)) {
-            const result = await sshManager.handleSFTPMkdir(sessionId, payload.path);
-            ws.send(JSON.stringify({ type: 'sftp-mkdir-response', sessionId, success: result }));
+            try {
+              await sshManager.handleSFTPMkdir(sessionId, payload.path);
+              ws.send(JSON.stringify({
+                type: 'sftp-mkdir-response',
+                sessionId,
+                requestId: payload.requestId,
+                success: true
+              }));
+            } catch (err) {
+              ws.send(JSON.stringify({
+                type: 'sftp-mkdir-response',
+                sessionId,
+                requestId: payload.requestId,
+                success: false,
+                error: err.message
+              }));
+            }
+          } else {
+            ws.send(JSON.stringify({
+              type: 'sftp-mkdir-response',
+              sessionId,
+              requestId: payload.requestId,
+              success: false,
+              error: '会话不存在'
+            }));
           }
           break;
         case 'sftp-rename':
           if (sessionId && sessions.has(sessionId)) {
             const result = await sshManager.handleSFTPRename(sessionId, payload.oldPath, payload.newPath);
-            ws.send(JSON.stringify({ type: 'sftp-rename-response', sessionId, success: result }));
+            ws.send(JSON.stringify({
+              type: 'sftp-rename-response',
+              sessionId,
+              requestId: payload.requestId,   // 新增
+              success: result
+            }));
           }
           break;
         case 'sftp-chmod':
           if (sessionId && sessions.has(sessionId)) {
             const result = await sshManager.handleSFTPChmod(sessionId, payload.path, payload.mode);
-            ws.send(JSON.stringify({ type: 'sftp-chmod-response', sessionId, success: result }));
+            ws.send(JSON.stringify({
+              type: 'sftp-chmod-response',
+              sessionId,
+              requestId: payload.requestId,   // 新增
+              success: result
+            }));
+          }
+          break;
+        case 'sftp-delete':
+          if (sessionId && sessions.has(sessionId)) {
+            const result = await sshManager.handleSFTPDelete(sessionId, payload.path);
+            ws.send(JSON.stringify({
+              type: 'sftp-delete-response',
+              sessionId,
+              requestId: payload.requestId,   // 新增（可选，但建议统一）
+              success: result
+            }));
           }
           break;
         default:
@@ -248,12 +286,12 @@ wss.on('connection', (ws, req) => {
 });
 
 app.post('/api/sftp/upload', upload.single('file'), async (req, res) => {
-  const { sessionId, remotePath } = req.body;
+  const { sessionId, remotePath, remoteFileName } = req.body;
   const file = req.file;
   if (!sessionId || !file || !remotePath) return res.status(400).json({ success: false, error: '缺少必要参数' });
   if (!sessions.has(sessionId)) return res.status(404).json({ success: false, error: '会话不存在' });
   try {
-    let originalName = file.originalname;
+    let originalName = remoteFileName || file.originalname;
     try { originalName = Buffer.from(originalName, 'latin1').toString('utf8'); } catch(e) {}
     const remoteFilePath = path.join(remotePath, originalName).replace(/\\/g, '/');
     await sshManager.handleSFTPUpload(sessionId, file.path, remoteFilePath);
