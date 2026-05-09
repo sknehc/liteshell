@@ -1,5 +1,6 @@
 const { Client } = require('ssh2');
 const fs = require('fs');
+const iconv = require('iconv-lite');  // 添加这一行
 
 class SSHManager {
   constructor(sessions) {
@@ -19,11 +20,9 @@ class SSHManager {
       }
       ws.send(JSON.stringify({ type: 'ssh-connected', sessionId, success: true }));
 
-      // 默认终端参数（确保 cols/rows 为正整数）
       const cols = Math.max(80, config.cols || 120);
       const rows = Math.max(24, config.rows || 30);
 
-      // 尝试创建 shell，如果失败则降级终端类型
       const createShell = (termType, callback) => {
         conn.shell({ term: termType, cols, rows }, callback);
       };
@@ -31,11 +30,9 @@ class SSHManager {
       createShell('xterm-256color', (err, stream) => {
         if (err) {
           console.warn(`xterm-256color 终端创建失败 (${sessionId}):`, err.message);
-          // 尝试降级到 xterm
           createShell('xterm', (err2, stream2) => {
             if (err2) {
               console.warn(`xterm 终端创建失败 (${sessionId}):`, err2.message);
-              // 最终降级到 vt100
               createShell('vt100', (err3, stream3) => {
                 if (err3) {
                   console.error(`所有终端类型均失败 (${sessionId}):`, err3.message);
@@ -57,14 +54,13 @@ class SSHManager {
       const setupStream = (stream) => {
         const session = this.sessions.get(sessionId);
         session.stream = stream;
-        session.encoding = encoding; // 保存编码
+        session.encoding = encoding;
         stream.on('data', (data) => {
-          // 将 Buffer 按指定编码解码为字符串
           let decoded;
           try {
             decoded = iconv.decode(data, encoding);
           } catch(e) {
-            decoded = data.toString('utf8'); // 降级
+            decoded = data.toString('utf8');
           }
           ws.send(JSON.stringify({ type: 'ssh-data', sessionId, data: decoded }));
         });
@@ -127,7 +123,6 @@ class SSHManager {
     }
   }
 
-  // 获取或建立 SFTP 通道（复用）
   async getSFTP(sessionId) {
     const session = this.sessions.get(sessionId);
     if (!session || !session.sshClient) {
@@ -136,7 +131,6 @@ class SSHManager {
     if (session.sftp) {
       return session.sftp;
     }
-    // 尝试新建 SFTP 通道
     return new Promise((resolve, reject) => {
       session.sshClient.sftp((err, sftp) => {
         if (err) {
@@ -180,7 +174,6 @@ class SSHManager {
         });
       });
     } catch (err) {
-      // 捕获通道打开失败的错误，转换为更友好的提示
       if (err.message === 'No response from server' || err.message.includes('Channel open failure')) {
         throw new Error('无法打开 SFTP 通道，可能是服务器限制了并发会话数（MaxSessions=1）。请尝试修改 SSH 服务器配置或使用单独的连接。');
       }
@@ -257,11 +250,9 @@ class SSHManager {
     return new Promise((resolve, reject) => {
       sftp.mkdir(path, (err) => {
         if (err) {
-          // err.code === 4 通常表示操作失败，可能是目录已存在
           if (err.code === 4) {
             sftp.stat(path, (statErr, stats) => {
               if (!statErr && stats.isDirectory()) {
-                // 目录已存在 -> 视为成功
                 resolve(true);
               } else {
                 reject(new Error(`无法创建目录: ${statErr ? statErr.message : '路径已存在但不是目录或无法访问'}`));
@@ -365,6 +356,49 @@ class SSHManager {
       writeStream.on('error', reject);
       writeStream.on('close', () => resolve(true));
       writeStream.end();
+    });
+  }
+
+  async getSystemStats(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session || !session.sshClient) {
+      throw new Error('SSH会话不存在');
+    }
+
+    return new Promise((resolve) => {
+      // 注意：使用数组拼接避免模板字符串内的反斜杠转义问题
+      const command = [
+        'cpu=$(top -bn1 2>/dev/null | grep "Cpu(s)" | awk \'{print $2}\' | cut -d\'%\' -f1);',
+        'if [ -z "$cpu" ]; then',
+        '  cpu=$(top -bn1 2>/dev/null | grep "%Cpu" | awk \'{print $2}\' | cut -d\'%\' -f1);',
+        'fi;',
+        'mem=$(free -m 2>/dev/null | awk \'NR==2{printf "%.1f", $3*100/$2}\');',
+        'echo "CPU:${cpu:-0}% MEM:${mem:-0}%"'
+      ].join(' ');
+
+      session.sshClient.exec(command, (err, stream) => {
+        if (err) {
+          console.error(`获取系统状态失败 ${sessionId}:`, err);
+          resolve({ cpu: 0, mem: 0 });
+          return;
+        }
+
+        let output = '';
+        stream.on('data', (data) => {
+          output += data.toString();
+        });
+        stream.on('close', () => {
+          const cpuMatch = output.match(/CPU:([\d.]+)%/);
+          const memMatch = output.match(/MEM:([\d.]+)%/);
+          resolve({
+            cpu: cpuMatch ? parseFloat(cpuMatch[1]) : 0,
+            mem: memMatch ? parseFloat(memMatch[1]) : 0
+          });
+        });
+        stream.on('error', () => {
+          resolve({ cpu: 0, mem: 0 });
+        });
+      });
     });
   }
 

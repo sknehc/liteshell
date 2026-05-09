@@ -171,6 +171,14 @@ wss.on('connection', (ws, req) => {
           currentSessionId = sessionId || uuidv4();
           await sshManager.handleSSHConnect(ws, currentSessionId, payload);
           break;
+        case 'ssh-stats':
+          if (sessionId && sessions.has(sessionId)) {
+            const stats = await sshManager.getSystemStats(sessionId);
+            ws.send(JSON.stringify({ type: 'ssh-stats-response', sessionId, stats, success: true }));
+          } else {
+            ws.send(JSON.stringify({ type: 'ssh-stats-response', sessionId, success: false, error: '会话不存在' }));
+          }
+          break;
         case 'ssh-data':
           if (sessionId && sessions.has(sessionId)) sshManager.handleSSHData(sessionId, payload.data);
           break;

@@ -108,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import {ref, onMounted, computed, provide} from 'vue'
 import { Monitor, Setting, Close, Sunny, Moon } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import ConnectionList from './components/ConnectionList.vue'
@@ -274,8 +274,8 @@ const onMouseMove = (e: MouseEvent) => {
   if (!isResizing) return
   const delta = e.clientX - startX
   let newWidth = startWidth + delta
-  if (newWidth < 215) newWidth = 215
-  if (newWidth > 400) newWidth = 400
+  if (newWidth < 320) newWidth = 320
+  if (newWidth > 520) newWidth = 520
   sidebarWidth.value = newWidth
   // 实时保存到 localStorage，拖拽过程中立即生效，避免闪烁
   localStorage.setItem(SIDEBAR_WIDTH_KEY, newWidth.toString())
@@ -367,6 +367,15 @@ onMounted(async () => {
     loadTheme()
   })
 })
+const activeSessionId = computed(() => {
+  const activeTabObj = tabs.value.find(tab => tab.id === activeTab.value)
+  if (activeTabObj && activeTabObj.type === 'ssh' && activeTabObj.sessionId) {
+    return activeTabObj.sessionId
+  }
+  return null
+})
+provide('activeSessionId', activeSessionId)
+
 </script>
 
 <style scoped>

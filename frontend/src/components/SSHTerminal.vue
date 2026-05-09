@@ -46,6 +46,7 @@ import { Close, RefreshRight, FullScreen } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SFTPManager from './SFTPManager.vue'
 import { getConfig } from '../api/config'
+import { useStatsStore } from '../stores/statsStore'
 
 const props = defineProps<{
   connection: any
@@ -62,7 +63,9 @@ const connected = ref(false)
 const activeTab = ref('terminal')
 const isConnecting = ref(false)
 let copyTimeout: number | null = null
-
+const statsStore = useStatsStore()
+let statsTimer: number | null = null
+let pendingStatsRequest = false
 // 获取终端设置
 const fetchSettings = async () => {
   try {
@@ -85,7 +88,33 @@ const fetchSettings = async () => {
     }
   }
 }
+// 请求系统状态
+const requestSystemStats = () => {
+  if (!ws.value || ws.value.readyState !== WebSocket.OPEN || pendingStatsRequest) return
+  if (!connected.value) return
 
+  pendingStatsRequest = true
+  ws.value.send(JSON.stringify({
+    type: 'ssh-stats',
+    sessionId: props.sessionId
+  }))
+}
+
+// 启动统计定时器
+const startStatsTimer = () => {
+  if (statsTimer) clearInterval(statsTimer)
+  statsTimer = window.setInterval(() => {
+    requestSystemStats()
+  }, 1000)
+}
+
+// 停止统计定时器
+const stopStatsTimer = () => {
+  if (statsTimer) {
+    clearInterval(statsTimer)
+    statsTimer = null
+  }
+}
 // 右键粘贴处理
 let currentContextMenuHandler: ((e: MouseEvent) => void) | null = null
 const bindContextMenu = (enable: boolean) => {
@@ -280,6 +309,7 @@ const connectSSH = () => {
         connected.value = true
         isConnecting.value = false
         ElMessage.success('SSH连接成功')
+        startStatsTimer()
         nextTick(() => {
           applyTerminalSettings()
           resizeTerminal()
@@ -289,6 +319,12 @@ const connectSSH = () => {
       case 'ssh-data':
         if (terminal) terminal.write(message.data)
         break
+      case 'ssh-stats-response':
+        pendingStatsRequest = false
+        if (message.success && message.stats) {
+          statsStore.updateStats(props.sessionId, message.stats.cpu, message.stats.mem)
+        }
+        break
       case 'ssh-error':
         ElMessage.error('SSH错误: ' + message.error)
         connected.value = false
@@ -296,6 +332,8 @@ const connectSSH = () => {
         break
       case 'ssh-disconnected':
         ElMessage.warning('SSH连接已断开')
+        stopStatsTimer()
+        statsStore.clearStats(props.sessionId)
         connected.value = false
         isConnecting.value = false
         break
@@ -384,6 +422,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  stopStatsTimer()
   if (ws.value && ws.value.readyState === WebSocket.OPEN) {
     ws.value.send(JSON.stringify({
       type: 'ssh-disconnect',

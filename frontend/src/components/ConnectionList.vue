@@ -1,15 +1,43 @@
 <template>
   <div class="connection-list">
     <div class="list-header">
-      <!-- 第一行：Logo -->
+      <!-- Logo + 系统状态 -->
       <div class="logo-row">
         <div class="logo-area">
-          <el-icon><Monitor /></el-icon>
-          <span class="app-name">liteshell</span>
+          <div class="logo-left">
+            <el-icon><Monitor /></el-icon>
+            <span class="app-name">liteshell</span>
+          </div>
+          <!-- 实时系统状态 - 进度条，左对齐占满宽度 -->
+          <div v-if="activeSessionId && currentStats" class="system-stats">
+            <div class="stat-item">
+              <span class="stat-label">CPU</span>
+              <el-progress
+                  :percentage="currentStats.cpu"
+                  :stroke-width="6"
+                  :show-text="true"
+              />
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">MEM</span>
+              <el-progress
+                  :percentage="currentStats.mem"
+                  :stroke-width="6"
+                  :show-text="true"
+              />
+            </div>
+          </div>
+          <div v-else-if="!hasActiveSSH" class="system-stats idle">
+            <span class="stat-idle">未连接SSH</span>
+          </div>
+          <div v-else class="system-stats loading">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            <span>加载中...</span>
+          </div>
         </div>
       </div>
 
-      <!-- 第二行：按钮 + 搜索框 -->
+      <!-- 按钮 + 搜索框 -->
       <div class="action-row">
         <el-button type="primary" size="default" @click="$emit('newConnection')">
           <el-icon><Plus /></el-icon>
@@ -62,7 +90,7 @@
         </div>
       </div>
 
-      <!-- 未分组区域（兼容旧数据，实际上所有连接都应归入分组） -->
+      <!-- 未分组区域 -->
       <div v-if="ungroupedConnections.length > 0" class="group">
         <div class="group-header" @click="toggleGroup('ungrouped')">
           <el-icon><ArrowRight v-if="!expandedGroups['ungrouped']" /><ArrowDown v-else /></el-icon>
@@ -86,14 +114,12 @@
       </div>
     </div>
 
-    <!-- 连接右键菜单 -->
+    <!-- 右键菜单 -->
     <div v-if="contextMenuVisible" class="context-menu" :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }">
       <div @click="handleEdit">编辑</div>
       <div @click="deleteConnection">删除</div>
       <div @click="duplicateConnection">复制</div>
     </div>
-
-    <!-- 分组右键菜单 -->
     <div v-if="groupContextMenuVisible" class="context-menu" :style="{ top: groupContextMenuY + 'px', left: groupContextMenuX + 'px' }">
       <div @click="deleteGroup">删除分组</div>
     </div>
@@ -101,26 +127,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Plus, Search, ArrowRight, ArrowDown, Monitor, FolderOpened, SuccessFilled } from '@element-plus/icons-vue'
+import { ref, computed, onMounted, onUnmounted, inject } from 'vue'
+import type { Ref } from 'vue'
+import {
+  Plus, Search, ArrowRight, ArrowDown, Monitor, FolderOpened, SuccessFilled,
+  Cpu, DataLine, Loading
+} from '@element-plus/icons-vue'
 import { useConnectionStore } from '../stores/connectionStore'
+import { useStatsStore } from '../stores/statsStore'
 import { getConfig, saveConfigKey } from '../api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const emit = defineEmits(['selectConnection', 'newConnection', 'editConnection'])
 
 const connectionStore = useConnectionStore()
+const statsStore = useStatsStore()
+const activeSessionId = inject<Ref<string | null>>('activeSessionId', ref(null))
+
 const searchText = ref('')
 const expandedGroups = ref<Record<string, boolean>>({})
 const selectedConnection = ref<any>(null)
 
-// 连接右键菜单
+// 右键菜单状态
 const contextMenuVisible = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
 const contextMenuConnection = ref<any>(null)
-
-// 分组右键菜单
 const groupContextMenuVisible = ref(false)
 const groupContextMenuX = ref(0)
 const groupContextMenuY = ref(0)
@@ -155,6 +187,13 @@ const ungroupedConnections = computed(() => {
   return filtered
 })
 
+// 实时统计
+const currentStats = computed(() => {
+  if (!activeSessionId.value) return null
+  return statsStore.getStats(activeSessionId.value)
+})
+const hasActiveSSH = computed(() => !!activeSessionId.value)
+
 const toggleGroup = async (groupId: string) => {
   expandedGroups.value[groupId] = !expandedGroups.value[groupId]
   await saveConfigKey('expandedGroups', expandedGroups.value)
@@ -167,6 +206,7 @@ const selectConnection = (conn: any) => {
 
 const statusColor = (conn: any) => '#67C23A'
 
+// 右键菜单处理
 const showContextMenu = (event: MouseEvent, conn: any) => {
   contextMenuConnection.value = conn
   contextMenuVisible.value = true
@@ -174,14 +214,12 @@ const showContextMenu = (event: MouseEvent, conn: any) => {
   contextMenuY.value = event.clientY
   event.preventDefault()
 }
-
 const handleEdit = () => {
   if (contextMenuConnection.value) {
     emit('editConnection', contextMenuConnection.value)
   }
   contextMenuVisible.value = false
 }
-
 const deleteConnection = async () => {
   try {
     await ElMessageBox.confirm('确定要删除这个连接吗？', '提示', { type: 'warning' })
@@ -189,12 +227,9 @@ const deleteConnection = async () => {
       await connectionStore.deleteConnection(contextMenuConnection.value.id)
       ElMessage.success('已删除')
     }
-  } catch {
-    // 取消删除
-  }
+  } catch { }
   contextMenuVisible.value = false
 }
-
 const duplicateConnection = async () => {
   if (contextMenuConnection.value) {
     const newConn = { ...contextMenuConnection.value, id: Date.now().toString(), name: contextMenuConnection.value.name + ' (副本)' }
@@ -203,7 +238,6 @@ const duplicateConnection = async () => {
   }
   contextMenuVisible.value = false
 }
-
 const showGroupContextMenu = (event: MouseEvent, group: any) => {
   contextMenuGroup.value = group
   groupContextMenuVisible.value = true
@@ -211,7 +245,6 @@ const showGroupContextMenu = (event: MouseEvent, group: any) => {
   groupContextMenuY.value = event.clientY
   event.preventDefault()
 }
-
 const deleteGroup = async () => {
   if (!contextMenuGroup.value) return
   const groupName = contextMenuGroup.value.name
@@ -224,12 +257,9 @@ const deleteGroup = async () => {
     await ElMessageBox.confirm(`确定要删除分组“${groupName}”及其下的所有连接吗？此操作不可恢复。`, '警告', { type: 'warning' })
     await connectionStore.deleteGroup(groupName)
     ElMessage.success('分组已删除')
-  } catch {
-    // 取消
-  }
+  } catch { }
   groupContextMenuVisible.value = false
 }
-
 const handleClickOutside = () => {
   contextMenuVisible.value = false
   groupContextMenuVisible.value = false
@@ -269,21 +299,92 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 12px;
 }
+
 .logo-row {
   display: flex;
   justify-content: flex-start;
 }
+
 .logo-area {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
 }
-.logo-area .el-icon {
-  font-size: 20px;
-  color: var(--el-color-primary);
+
+.logo-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 系统状态区域 - 左对齐，占满剩余宽度 */
+.system-stats {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--el-fill-color-light);
+  /* 不设圆角 */
+  border-radius: 0;
+  min-width: 0; /* 防止flex溢出 */
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.stat-label {
+  width: 32px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--el-text-color-secondary);
+  flex-shrink: 0;
+}
+
+/* 进度条占满剩余宽度，无圆角 */
+:deep(.el-progress) {
+  flex: 1;
+}
+
+:deep(.el-progress-bar__outer) {
+  background-color: var(--el-border-color-lighter);
+  border-radius: 0;
+}
+
+:deep(.el-progress-bar__inner) {
+  background-color: var(--el-color-primary);
+  border-radius: 0;
+}
+
+:deep(.el-progress__text) {
+  font-size: 11px;
+  color: var(--el-text-color-primary);
+  margin-left: 6px;
+}
+
+/* 空状态和加载中样式 */
+.system-stats.idle,
+.system-stats.loading {
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 0;
+}
+
+.stat-idle {
+  font-size: 13px;
+  color: var(--el-text-color-placeholder);
 }
 
 .search-input {
@@ -306,7 +407,9 @@ onUnmounted(() => {
 .app-name {
   letter-spacing: 1px;
   font-size: 24px;
+  font-weight: bold;
 }
+
 .group {
   margin-bottom: 8px;
 }
