@@ -182,7 +182,7 @@
         <el-form-item label="权限值 (八进制)"><el-input v-model="chmodValue" placeholder="例如 755" /></el-form-item>
         <el-form-item label="详细权限">
           <el-checkbox-group v-model="chmodChecks">
-           <div style="margin-bottom: 8px;"><strong>所有者：</strong><el-checkbox label="owner-read">读</el-checkbox><el-checkbox label="owner-write">写</el-checkbox><el-checkbox label="owner-exec">执行</el-checkbox></div>
+            <div style="margin-bottom: 8px;"><strong>所有者：</strong><el-checkbox label="owner-read">读</el-checkbox><el-checkbox label="owner-write">写</el-checkbox><el-checkbox label="owner-exec">执行</el-checkbox></div>
             <div style="margin-bottom: 8px;"><strong>组：</strong><el-checkbox label="group-read">读</el-checkbox><el-checkbox label="group-write">写</el-checkbox><el-checkbox label="group-exec">执行</el-checkbox></div>
             <div><strong>其他：</strong><el-checkbox label="other-read">读</el-checkbox><el-checkbox label="other-write">写</el-checkbox><el-checkbox label="other-exec">执行</el-checkbox></div>
           </el-checkbox-group>
@@ -203,19 +203,27 @@
       <template #footer><el-button @click="cancelOverwrite">取消</el-button><el-button type="primary" @click="confirmOverwrite">确定</el-button></template>
     </el-dialog>
 
-    <!-- 查看文件对话框 -->
+    <!-- 查看文件对话框（带行号，复用编辑模式布局） -->
     <el-dialog v-model="viewDialogVisible" title="查看文件" width="80%" top="5vh">
-      <div class="editor-container">
-        <pre class="view-content">{{ viewContent }}</pre>
+      <div class="editor-wrapper edit-mode">
+        <div class="line-numbers" ref="viewLineNumbersRef">{{ viewLineNumbers }}</div>
+        <pre class="code-editor view-only" @scroll="syncViewLineNumbersScroll">{{ viewContent }}</pre>
       </div>
       <template #footer>
         <el-button @click="viewDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 
+    <!-- 编辑文件对话框（带行号） -->
     <el-dialog v-model="editDialogVisible" title="编辑文件" width="80%" top="5vh" @close="closeEditor">
-      <div class="editor-container"><textarea ref="editorTextarea" v-model="editContent" class="code-editor" :style="{ height: '60vh', fontFamily: 'monospace', fontSize: '14px' }"></textarea></div>
-      <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" @click="saveFileContent">保存</el-button></template>
+      <div class="editor-wrapper edit-mode">
+        <div class="line-numbers" ref="editLineNumbersRef">{{ editLineNumbers }}</div>
+        <textarea ref="editorTextarea" v-model="editContent" class="code-editor" @scroll="syncEditLineNumbersScroll"></textarea>
+      </div>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveFileContent">保存</el-button>
+      </template>
     </el-dialog>
 
     <el-dialog v-model="renameDialogVisible" title="重命名" width="400px">
@@ -241,7 +249,9 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import {
   Upload, Download, FolderAdd, Delete, Refresh, Folder, Document,
-  CopyDocument, DArrowRight, Loading, Monitor, Star, Edit, Close, ArrowDown
+  CopyDocument, DArrowRight, Loading, Monitor, Star, Edit, Close, ArrowDown,
+  View, Hide, Picture, VideoCamera, Headphone, Collection, Code,
+  Edit as EditIcon, Files, Grid, Presentation, Font
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getConfig, saveConfigKey } from '../api/config'
@@ -254,11 +264,11 @@ const props = defineProps<{
   ws: WebSocket | null
   sshReady: boolean
   onOpenTerminal?: (path: string | null) => void
-  initialPath?: string | null   // 新增：用于恢复路径的初始路径
+  initialPath?: string | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'path-change', path: string): void   // 新增：当 SFTP 当前路径发生变化时通知父组件
+  (e: 'path-change', path: string): void
 }>()
 
 const connectionStore = useConnectionStore()
@@ -308,7 +318,6 @@ const navigateToSafePath = async (targetPath: string): Promise<boolean> => {
         currentPath.value = targetPath
         files.value = result.files
         isNavigating.value = false
-        // 路径变化时通知父组件
         emit('path-change', targetPath)
         resolve(true)
       },
@@ -408,7 +417,6 @@ const contextMenuVisible = ref(false); const contextMenuX = ref(0); const contex
 const chmodDialogVisible = ref(false); const chmodValue = ref('755'); const chmodChecks = ref<string[]>([])
 const dragOverFolder = ref<any>(null)
 
-// 覆盖确认相关
 const confirmOverwriteVisible = ref(false); const pendingFile = ref<any>(null); const pendingTargetDir = ref<string>(''); const pendingRemoteFileName = ref<string>('')
 const overwriteAction = ref<'overwrite' | 'skip' | 'cancel'>('overwrite'); const alwaysSameAction = ref(false)
 let resolveOverwrite: ((action: 'overwrite' | 'skip' | 'cancel') => void) | null = null
@@ -632,10 +640,20 @@ const openEditor = async (file: any) => {
     const text = await response.text()
     editContent.value = text
     editDialogVisible.value = true
+    nextTick(() => {
+      syncEditLineNumbersScroll() // 初始同步滚动位置
+    })
   } catch (err) { ElMessage.error('读取文件失败: ' + err.message) }
 }
+const syncViewLineNumbersScroll = () => {
+  if (viewLineNumbersRef.value) {
+    const pre = viewLineNumbersRef.value.nextElementSibling as HTMLElement
+    if (pre) {
+      viewLineNumbersRef.value.scrollTop = pre.scrollTop
+    }
+  }
+}
 
-// 查看文件（只读）
 const viewFile = async () => {
   if (!contextMenuFile.value || contextMenuFile.value.type === 'directory') {
     ElMessage.warning('不能查看文件夹');
@@ -758,7 +776,7 @@ const clearTransfers = () => { transfers.value = [] }
 const showContextMenu = (event: MouseEvent, file: any) => { contextMenuFile.value = file; contextMenuVisible.value = true; contextMenuX.value = event.clientX; contextMenuY.value = event.clientY; event.preventDefault() }
 const editContextFile = () => { if (contextMenuFile.value) openEditor(contextMenuFile.value); contextMenuVisible.value = false }
 const closeContextMenu = () => { contextMenuVisible.value = false }
-// 复制文件名
+
 const copyFileName = () => {
   if (contextMenuFile.value) {
     navigator.clipboard.writeText(contextMenuFile.value.name)
@@ -768,7 +786,6 @@ const copyFileName = () => {
   contextMenuVisible.value = false;
 };
 
-// 复制完整路径
 const copyFilePath = () => {
   if (contextMenuFile.value && currentPath.value !== null) {
     const fullPath = currentPath.value === '/' ? `/${contextMenuFile.value.name}` : `${currentPath.value}/${contextMenuFile.value.name}`;
@@ -821,7 +838,7 @@ const handleWebSocketMessage = (event: MessageEvent) => {
   if (type === 'sftp-pwd-response') {
     if (success && path) {
       currentPath.value = path
-      emit('path-change', path)   // 通知父组件路径变化
+      emit('path-change', path)
       refreshFileList()
     } else {
       ElMessage.error('获取当前目录失败: ' + (error || '未知错误'))
@@ -859,7 +876,6 @@ const fetchCurrentDirectory = () => {
   }
 }
 
-// 当 SSH 就绪时，优先使用 initialPath 恢复路径
 watch(() => props.sshReady, (ready) => {
   if (ready && currentPath.value === null) {
     if (props.initialPath && props.initialPath.trim() !== '') {
@@ -871,6 +887,26 @@ watch(() => props.sshReady, (ready) => {
 })
 
 const onOpenTerminalClick = () => { if (props.onOpenTerminal) props.onOpenTerminal(currentPath.value) }
+
+// 行号相关逻辑
+const viewLineNumbersRef = ref<HTMLElement>()
+const editLineNumbersRef = ref<HTMLElement>()
+
+const viewLineNumbers = computed(() => {
+  const lines = (viewContent.value || '').split('\n')
+  return lines.map((_, i) => i + 1).join('\n')
+})
+
+const editLineNumbers = computed(() => {
+  const lines = (editContent.value || '').split('\n')
+  return lines.map((_, i) => i + 1).join('\n')
+})
+
+const syncEditLineNumbersScroll = () => {
+  if (editorTextarea.value && editLineNumbersRef.value) {
+    editLineNumbersRef.value.scrollTop = editorTextarea.value.scrollTop
+  }
+}
 
 // 收藏功能
 const favoritesDropdownRef = ref<any>(null)
@@ -932,7 +968,6 @@ function getFileIcon(fileName: string): string {
 
 onMounted(async () => {
   await loadColWidths(); await loadSortState(); await loadPublicFavorites()
-  // 如果 SSH 已经就绪且未加载目录，则根据 initialPath 或默认方式加载
   if (props.sshReady && currentPath.value === null) {
     if (props.initialPath && props.initialPath.trim() !== '') {
       navigateToSafePath(props.initialPath)
@@ -952,6 +987,75 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* ========== 通用行号样式 ========== */
+.line-numbers {
+  background-color: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  padding: 10px 8px;
+  text-align: right;
+  user-select: none;
+  white-space: pre;
+  border-right: 1px solid var(--el-border-color-lighter);
+  line-height: inherit;
+  box-shadow: none;
+}
+
+/* ========== 编辑模式（编辑 & 查看共用） ========== */
+.editor-wrapper.edit-mode {
+  position: relative;
+  height: 60vh;
+  overflow: hidden;
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+}
+
+.editor-wrapper.edit-mode .line-numbers {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  padding: 10px 8px;
+  background-color: var(--el-fill-color-light);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.editor-wrapper.edit-mode .line-numbers::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-wrapper.edit-mode .code-editor {
+  margin-left: 60px;
+  width: calc(100% - 60px);
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: vertical;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 14px;
+  line-height: inherit;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-primary);
+}
+
+/* 查看模式专用：只读 pre，隐藏滚动条 */
+.editor-wrapper.edit-mode .code-editor.view-only {
+  resize: none;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-y: auto;
+  cursor: default;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.editor-wrapper.edit-mode .code-editor.view-only::-webkit-scrollbar {
+  display: none;
+}
+
+/* ========== 原有样式（保留不变） ========== */
 .custom-breadcrumb {
   display: flex;
   align-items: center;
@@ -974,15 +1078,6 @@ onUnmounted(() => {
 }
 .file-item .folder-icon {
   color: #e6a23c;
-}
-.code-editor {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
-  background: var(--el-bg-color);
-  color: var(--el-text-color-primary);
-  resize: vertical;
 }
 .sftp-container {
   height: 100%;
@@ -1226,15 +1321,5 @@ onUnmounted(() => {
 }
 .el-button .el-icon {
   margin-right: 4px;
-}
-.view-content {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  background: var(--el-bg-color);
-  padding: 12px;
-  border-radius: 4px;
-  max-height: 60vh;
-  overflow: auto;
-  font-family: monospace;
 }
 </style>
