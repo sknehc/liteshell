@@ -28,6 +28,8 @@
             :ws="ws"
             :ssh-ready="connected"
             :on-open-terminal="openTerminalAtPath"
+            :initial-path="lastSftpPath"
+            @path-change="handleSftpPathChange"
         />
         <div v-else class="sftp-placeholder">
           <el-empty description="请等待 SSH 连接成功" />
@@ -66,6 +68,10 @@ let copyTimeout: number | null = null
 const statsStore = useStatsStore()
 let statsTimer: number | null = null
 let pendingStatsRequest = false
+const lastSftpPath = ref<string | null>(null)
+const handleSftpPathChange = (path: string) => {
+  lastSftpPath.value = path
+}
 // 获取终端设置
 const fetchSettings = async () => {
   try {

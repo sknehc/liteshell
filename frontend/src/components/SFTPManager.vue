@@ -241,6 +241,11 @@ const props = defineProps<{
   ws: WebSocket | null
   sshReady: boolean
   onOpenTerminal?: (path: string | null) => void
+  initialPath?: string | null   // 新增：用于恢复路径的初始路径
+}>()
+
+const emit = defineEmits<{
+  (e: 'path-change', path: string): void   // 新增：当 SFTP 当前路径发生变化时通知父组件
 }>()
 
 const connectionStore = useConnectionStore()
@@ -288,6 +293,8 @@ const navigateToSafePath = async (targetPath: string): Promise<boolean> => {
         currentPath.value = targetPath
         files.value = result.files
         isNavigating.value = false
+        // 路径变化时通知父组件
+        emit('path-change', targetPath)
         resolve(true)
       },
       reject: (err: Error) => {
@@ -308,7 +315,9 @@ const navigateToSafePath = async (targetPath: string): Promise<boolean> => {
   })
 }
 
-const navigateToPath = async (idx: number) => { if (currentPath.value !== null) await navigateToSafePath(getPathFromIndex(idx)) }
+const navigateToPath = async (idx: number) => {
+  if (currentPath.value !== null) await navigateToSafePath(getPathFromIndex(idx))
+}
 const goUpDirectory = async () => {
   if (currentPath.value === null || currentPath.value === '/') return
   const parentPath = currentPath.value.substring(0, currentPath.value.lastIndexOf('/')) || '/'
@@ -384,11 +393,11 @@ const contextMenuVisible = ref(false); const contextMenuX = ref(0); const contex
 const chmodDialogVisible = ref(false); const chmodValue = ref('755'); const chmodChecks = ref<string[]>([])
 const dragOverFolder = ref<any>(null)
 
-// 覆盖确认相关（移除永久偏好，只保留批次临时策略）
+// 覆盖确认相关
 const confirmOverwriteVisible = ref(false); const pendingFile = ref<any>(null); const pendingTargetDir = ref<string>(''); const pendingRemoteFileName = ref<string>('')
 const overwriteAction = ref<'overwrite' | 'skip' | 'cancel'>('overwrite'); const alwaysSameAction = ref(false)
 let resolveOverwrite: ((action: 'overwrite' | 'skip' | 'cancel') => void) | null = null
-const batchOverwriteAction = ref<'overwrite' | 'skip' | null>(null) // 本次批次的全局策略
+const batchOverwriteAction = ref<'overwrite' | 'skip' | null>(null)
 
 const checkFileExists = async (targetPath: string): Promise<boolean> => {
   try {
@@ -413,7 +422,6 @@ const showOverwriteConfirm = (file: File, targetDir: string, remoteFileName: str
 const confirmOverwrite = () => {
   const action = overwriteAction.value
   if (alwaysSameAction.value && (action === 'overwrite' || action === 'skip')) {
-    // 设置本次批次的全局策略（所有后续文件适用）
     batchOverwriteAction.value = action
   }
   if (resolveOverwrite) resolveOverwrite(action)
@@ -447,14 +455,12 @@ async function doUpload(file: File, remoteDir: string, remoteFileName: string): 
   }
 }
 
-// 通用文件上传：优先使用批次策略，否则弹框询问
 async function uploadFileToRemote(file: File, remoteDir: string, remoteFileName: string): Promise<boolean> {
   const fullRemotePath = remoteDir === '/' ? `/${remoteFileName}` : `${remoteDir}/${remoteFileName}`
   const exists = await checkFileExists(fullRemotePath)
   if (!exists) {
     return doUpload(file, remoteDir, remoteFileName)
   }
-  // 文件已存在，检查批次策略
   if (batchOverwriteAction.value) {
     if (batchOverwriteAction.value === 'overwrite') {
       return doUpload(file, remoteDir, remoteFileName)
@@ -463,19 +469,17 @@ async function uploadFileToRemote(file: File, remoteDir: string, remoteFileName:
       return false
     }
   }
-  // 没有批次策略，弹框询问
   const action = await showOverwriteConfirm(file, remoteDir, remoteFileName)
   if (action === 'overwrite') return doUpload(file, remoteDir, remoteFileName)
   return false
 }
 
-// 确保远程目录存在（如果目录已存在，不报错）
 async function ensureRemoteDirectory(dirPath: string): Promise<void> {
   if (dirPath === '/' || dirPath === '') return
   const parts = dirPath.split('/').filter(p => p)
-  let currentPath = ''
+  let currentPathBuild = ''
   for (const part of parts) {
-    currentPath += `/${part}`
+    currentPathBuild += `/${part}`
     try {
       await new Promise((resolve, reject) => {
         if (!props.ws || props.ws.readyState !== WebSocket.OPEN) reject(new Error('连接断开'))
@@ -490,7 +494,7 @@ async function ensureRemoteDirectory(dirPath: string): Promise<void> {
           }
         }
         props.ws!.addEventListener('message', handler)
-        props.ws!.send(JSON.stringify({ type: 'sftp-mkdir', sessionId: props.sessionId, path: currentPath, requestId }))
+        props.ws!.send(JSON.stringify({ type: 'sftp-mkdir', sessionId: props.sessionId, path: currentPathBuild, requestId }))
         setTimeout(() => { props.ws!.removeEventListener('message', handler); reject(new Error('创建目录超时')) }, 10000)
       })
     } catch (err) {
@@ -512,11 +516,9 @@ async function traverseFileEntry(entry: any, relativePath: string, filesList: Ar
   }
 }
 
-// 拖拽上传（支持文件夹递归）
 const onDrop = async (e: DragEvent) => {
   e.preventDefault()
   if (currentPath.value === null) return
-  // 重置批次策略
   batchOverwriteAction.value = null
 
   const targetFolder = dragOverFolder.value
@@ -532,8 +534,6 @@ const onDrop = async (e: DragEvent) => {
   for (let i = 0; i < items.length; i++) {
     const entry = items[i].webkitGetAsEntry()
     if (!entry) continue
-
-    // 关键修改：如果是文件夹，传入文件夹名作为相对路径前缀
     if (entry.isDirectory) {
       await traverseFileEntry(entry, entry.name, filesToUpload)
     } else {
@@ -562,11 +562,9 @@ const onDragEnterFolder = (file: any, e: DragEvent) => { if (file.type === 'dire
 const onDragLeaveFolder = () => { dragOverFolder.value = null }
 const onDragEnd = () => { dragOverFolder.value = null }
 
-// 点击上传按钮（只上传普通文件，不递归）
 const uploadFile = () => {
   if (!props.sshReady) { ElMessage.warning('请等待 SSH 连接就绪'); return }
   if (currentPath.value === null) { ElMessage.warning('目录尚未同步'); return }
-  // 重置批次策略
   batchOverwriteAction.value = null
 
   const input = document.createElement('input')
@@ -621,7 +619,6 @@ const saveFileContent = async () => {
   const fileName = editingFilePath.value.split('/').pop() || 'file'
   const file = new File([blob], fileName, { type: 'text/plain' })
   const dirPath = editingFilePath.value.split('/').slice(0, -1).join('/') || '/'
-  // 单个文件保存，重置批次策略（可选，但无影响）
   batchOverwriteAction.value = null
   await uploadFileToRemote(file, dirPath, fileName)
   editDialogVisible.value = false
@@ -756,8 +753,15 @@ const handleWebSocketMessage = (event: MessageEvent) => {
   const { type, requestId, success, files: fileList, error, path } = message
 
   if (type === 'sftp-pwd-response') {
-    if (success && path) { currentPath.value = path; refreshFileList() }
-    else { ElMessage.error('获取当前目录失败: ' + (error || '未知错误')); currentPath.value = '/'; refreshFileList() }
+    if (success && path) {
+      currentPath.value = path
+      emit('path-change', path)   // 通知父组件路径变化
+      refreshFileList()
+    } else {
+      ElMessage.error('获取当前目录失败: ' + (error || '未知错误'))
+      currentPath.value = '/'
+      refreshFileList()
+    }
     return
   }
   if (type === 'sftp-list-response' && requestId && pendingRequests.has(requestId)) {
@@ -783,8 +787,22 @@ watch(() => props.ws, (newWs, oldWs) => {
   if (newWs) { messageHandler = handleWebSocketMessage; newWs.addEventListener('message', messageHandler) }
 }, { immediate: true })
 
-const fetchCurrentDirectory = () => { if (props.sshReady && props.ws && props.ws.readyState === WebSocket.OPEN) props.ws.send(JSON.stringify({ type: 'sftp-pwd', sessionId: props.sessionId })) }
-watch(() => props.sshReady, (ready) => { if (ready && currentPath.value === null) fetchCurrentDirectory() })
+const fetchCurrentDirectory = () => {
+  if (props.sshReady && props.ws && props.ws.readyState === WebSocket.OPEN) {
+    props.ws.send(JSON.stringify({ type: 'sftp-pwd', sessionId: props.sessionId }))
+  }
+}
+
+// 当 SSH 就绪时，优先使用 initialPath 恢复路径
+watch(() => props.sshReady, (ready) => {
+  if (ready && currentPath.value === null) {
+    if (props.initialPath && props.initialPath.trim() !== '') {
+      navigateToSafePath(props.initialPath)
+    } else {
+      fetchCurrentDirectory()
+    }
+  }
+})
 
 const onOpenTerminalClick = () => { if (props.onOpenTerminal) props.onOpenTerminal(currentPath.value) }
 
@@ -848,10 +866,18 @@ function getFileIcon(fileName: string): string {
 
 onMounted(async () => {
   await loadColWidths(); await loadSortState(); await loadPublicFavorites()
-  if (props.sshReady && currentPath.value === null) fetchCurrentDirectory()
+  // 如果 SSH 已经就绪且未加载目录，则根据 initialPath 或默认方式加载
+  if (props.sshReady && currentPath.value === null) {
+    if (props.initialPath && props.initialPath.trim() !== '') {
+      navigateToSafePath(props.initialPath)
+    } else {
+      fetchCurrentDirectory()
+    }
+  }
   document.addEventListener('click', closeContextMenu)
   window.addEventListener('public-favorites-updated', onPublicFavoritesUpdated)
 })
+
 onUnmounted(() => {
   if (props.ws && messageHandler) props.ws.removeEventListener('message', messageHandler)
   document.removeEventListener('click', closeContextMenu)
