@@ -578,4 +578,8 @@ provide('activeSessionId', activeSessionId)
 .dark-theme .breadcrumb-separator {
   color: #d4d4d4;
 }
+.dark-theme .file-item.selected {
+  background: #2a4a5a;
+  color: #ffffff;
+}
 </style>

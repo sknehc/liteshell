@@ -217,7 +217,14 @@ wss.on('connection', (ws, req) => {
         case 'sftp-mkdir':
           if (sessionId && sessions.has(sessionId)) {
             try {
-              await sshManager.handleSFTPMkdir(sessionId, payload.path);
+              const session = sessions.get(sessionId);
+              let targetMode = null;
+              if (session && typeof session.umask === 'number') {
+                targetMode = 0o777 & (~session.umask & 0o777);
+              } else {
+                targetMode = 0o755;
+              }
+              await sshManager.handleSFTPMkdir(sessionId, payload.path, targetMode);
               ws.send(JSON.stringify({
                 type: 'sftp-mkdir-response',
                 sessionId,
@@ -302,7 +309,19 @@ app.post('/api/sftp/upload', upload.single('file'), async (req, res) => {
     let originalName = remoteFileName || file.originalname;
     try { originalName = Buffer.from(originalName, 'latin1').toString('utf8'); } catch(e) {}
     const remoteFilePath = path.join(remotePath, originalName).replace(/\\/g, '/');
-    await sshManager.handleSFTPUpload(sessionId, file.path, remoteFilePath);
+
+    // 检查文件是否已存在，若存在则获取原权限
+    let existingMode = null;
+    const exists = await sshManager.fileExists(sessionId, remoteFilePath);
+    if (exists) {
+      try {
+        existingMode = await sshManager.getFileMode(sessionId, remoteFilePath);
+      } catch (err) {
+        console.warn('获取原文件权限失败，将使用默认权限', err);
+      }
+    }
+
+    await sshManager.handleSFTPUpload(sessionId, file.path, remoteFilePath, existingMode);
     fs.unlinkSync(file.path);
     res.json({ success: true });
   } catch (err) {
@@ -395,7 +414,14 @@ app.post('/api/sftp/create-file', async (req, res) => {
   if (!sessionId || !filePath) return res.status(400).json({ success: false, error: '缺少必要参数' });
   if (!sessions.has(sessionId)) return res.status(404).json({ success: false, error: '会话不存在' });
   try {
-    await sshManager.createEmptyFile(sessionId, filePath);
+    const session = sessions.get(sessionId);
+    let targetMode = null;
+    if (session && typeof session.umask === 'number') {
+      targetMode = 0o666 & (~session.umask & 0o777);
+    } else {
+      targetMode = 0o644; // 后备
+    }
+    await sshManager.createEmptyFile(sessionId, filePath, targetMode);
     res.json({ success: true });
   } catch (err) {
     console.error('创建文件失败:', err);

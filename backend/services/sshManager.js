@@ -10,14 +10,36 @@ class SSHManager {
   async handleSSHConnect(ws, sessionId, config) {
     const { host, port, username, password, privateKey, encoding = 'utf8' } = config;
     const conn = new Client();
-
     conn.on('ready', () => {
       console.log(`SSH连接成功: ${sessionId}`);
-      if (!this.sessions.has(sessionId)) {
-        this.sessions.set(sessionId, { sshClient: conn, sftp: null });
+      // 先初始化 sessions 条目（确保存在）
+      let session = this.sessions.get(sessionId);
+      if (!session) {
+        session = { sshClient: conn, sftp: null };
+        this.sessions.set(sessionId, session);
       } else {
-        this.sessions.get(sessionId).sshClient = conn;
+        session.sshClient = conn;
       }
+
+      // 获取 umask 并存入 session
+      conn.exec('umask', (err, stream) => {
+        if (!err) {
+          let output = '';
+          stream.on('data', (data) => { output += data.toString(); });
+          stream.on('close', () => {
+            const umaskVal = parseInt(output.trim(), 8);
+            if (!isNaN(umaskVal)) {
+              session.umask = umaskVal;
+              console.log(`获取到 umask: ${umaskVal.toString(8)} for session ${sessionId}`);
+            } else {
+              console.log(`无法解析 umask 输出: "${output}"`);
+            }
+          });
+        } else {
+          console.warn(`获取 umask 失败: ${err.message}`);
+        }
+      });
+
       ws.send(JSON.stringify({ type: 'ssh-connected', sessionId, success: true }));
 
       const cols = Math.max(80, config.cols || 120);
@@ -245,18 +267,24 @@ class SSHManager {
     });
   }
 
-  async handleSFTPMkdir(sessionId, path) {
+  async handleSFTPMkdir(sessionId, path, mode = null) {
     const sftp = await this.getSFTP(sessionId);
+    const session = this.sessions.get(sessionId);
     return new Promise((resolve, reject) => {
-      sftp.mkdir(path, (err) => {
+      let targetMode = mode;
+      if (targetMode === null) {
+        targetMode = 0o755; // 默认
+        if (session && typeof session.umask === 'number') {
+          targetMode = 0o777 & (~session.umask & 0o777);
+        }
+      }
+      sftp.mkdir(path, { mode: targetMode }, (err) => {
         if (err) {
           if (err.code === 4) {
+            // 目录已存在，检查是否为目录
             sftp.stat(path, (statErr, stats) => {
-              if (!statErr && stats.isDirectory()) {
-                resolve(true);
-              } else {
-                reject(new Error(`无法创建目录: ${statErr ? statErr.message : '路径已存在但不是目录或无法访问'}`));
-              }
+              if (!statErr && stats.isDirectory()) resolve(true);
+              else reject(new Error(`无法创建目录: ${statErr ? statErr.message : '路径已存在但不是目录或无法访问'}`));
             });
           } else {
             reject(err);
@@ -289,17 +317,67 @@ class SSHManager {
     });
   }
 
-  async handleSFTPUpload(sessionId, localPath, remotePath) {
+  async handleSFTPUpload(sessionId, localPath, remotePath, mode = null) {
     const sftp = await this.getSFTP(sessionId);
+    const session = this.sessions.get(sessionId);
     return new Promise((resolve, reject) => {
       const readStream = fs.createReadStream(localPath);
-      const writeStream = sftp.createWriteStream(remotePath);
-      writeStream.on('close', () => resolve(true));
-      writeStream.on('error', reject);
+      let writeStream;
+
+      if (mode === null) {
+        // 新建文件：根据 umask 计算权限并在创建流时直接指定
+        let targetMode = 0o644; // 默认后备
+        if (session && typeof session.umask === 'number') {
+          // 计算 666 & ~umask
+          targetMode = 0o666 & (~session.umask & 0o777);
+          console.log(`umask: ${session.umask.toString(8)}, 计算目标权限: ${targetMode.toString(8)}`);
+        } else {
+          console.log(`未获取到 umask，使用默认权限 644`);
+        }
+        console.log(`创建文件并直接设置权限: ${targetMode.toString(8)} for ${remotePath}`);
+        writeStream = sftp.createWriteStream(remotePath, { mode: targetMode });
+      } else {
+        // 覆盖文件：先正常创建流，之后再恢复原权限
+        writeStream = sftp.createWriteStream(remotePath);
+      }
+
+      let finished = false;
+      writeStream.on('close', () => {
+        if (finished) return;
+        finished = true;
+        if (mode !== null) {
+          // 覆盖文件：恢复原权限
+          sftp.chmod(remotePath, mode, (err) => {
+            if (err) {
+              console.error(`chmod 失败 (覆盖) ${remotePath}:`, err);
+              reject(err);
+            } else {
+              console.log(`覆盖文件权限已恢复: ${mode.toString(8)}`);
+              resolve(true);
+            }
+          });
+        } else {
+          // 新建文件权限已在 createWriteStream 时设置，无需额外 chmod
+          resolve(true);
+        }
+      });
+      writeStream.on('error', (err) => {
+        if (finished) return;
+        finished = true;
+        reject(err);
+      });
       readStream.pipe(writeStream);
     });
   }
-
+  async getFileMode(sessionId, remotePath) {
+    const sftp = await this.getSFTP(sessionId);
+    return new Promise((resolve, reject) => {
+      sftp.stat(remotePath, (err, stats) => {
+        if (err) reject(err);
+        else resolve(stats.mode & 0o777);
+      });
+    });
+  }
   async handleSFTPDownload(sessionId, remotePath) {
     const sftp = await this.getSFTP(sessionId);
     return new Promise((resolve, reject) => {
@@ -349,10 +427,19 @@ class SSHManager {
     });
   }
 
-  async createEmptyFile(sessionId, remotePath) {
+  async createEmptyFile(sessionId, remotePath, mode = null) {
     const sftp = await this.getSFTP(sessionId);
+    const session = this.sessions.get(sessionId);
     return new Promise((resolve, reject) => {
-      const writeStream = sftp.createWriteStream(remotePath);
+      let targetMode = mode;
+      if (targetMode === null) {
+        // 新建文件：根据 umask 计算权限，默认为 0o644
+        targetMode = 0o644;
+        if (session && typeof session.umask === 'number') {
+          targetMode = 0o666 & (~session.umask & 0o777);
+        }
+      }
+      const writeStream = sftp.createWriteStream(remotePath, { mode: targetMode });
       writeStream.on('error', reject);
       writeStream.on('close', () => resolve(true));
       writeStream.end();

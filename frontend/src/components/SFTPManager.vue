@@ -169,9 +169,12 @@
     </div>
 
     <div v-if="contextMenuVisible" class="context-menu" :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }">
+      <div v-if="contextMenuFile && contextMenuFile.type !== 'directory'" @click="viewFile">查看</div>
       <div @click="editContextFile">编辑</div>
       <div @click="renameContextFile">重命名</div>
-      <div @click="chmodFile">权限</div>
+      <div @click="copyFileName">复制名称</div>
+      <div @click="copyFilePath">复制路径</div>
+      <div @click="chmodFile">权限设置</div>
     </div>
 
     <el-dialog v-model="chmodDialogVisible" title="修改权限" width="450px">
@@ -179,7 +182,7 @@
         <el-form-item label="权限值 (八进制)"><el-input v-model="chmodValue" placeholder="例如 755" /></el-form-item>
         <el-form-item label="详细权限">
           <el-checkbox-group v-model="chmodChecks">
-            <div style="margin-bottom: 8px;"><strong>所有者：</strong><el-checkbox label="owner-read">读</el-checkbox><el-checkbox label="owner-write">写</el-checkbox><el-checkbox label="owner-exec">执行</el-checkbox></div>
+           <div style="margin-bottom: 8px;"><strong>所有者：</strong><el-checkbox label="owner-read">读</el-checkbox><el-checkbox label="owner-write">写</el-checkbox><el-checkbox label="owner-exec">执行</el-checkbox></div>
             <div style="margin-bottom: 8px;"><strong>组：</strong><el-checkbox label="group-read">读</el-checkbox><el-checkbox label="group-write">写</el-checkbox><el-checkbox label="group-exec">执行</el-checkbox></div>
             <div><strong>其他：</strong><el-checkbox label="other-read">读</el-checkbox><el-checkbox label="other-write">写</el-checkbox><el-checkbox label="other-exec">执行</el-checkbox></div>
           </el-checkbox-group>
@@ -198,6 +201,16 @@
       </el-radio-group>
       <div style="margin-top: 16px;"><el-checkbox v-model="alwaysSameAction">总是这样做（不再询问）</el-checkbox></div>
       <template #footer><el-button @click="cancelOverwrite">取消</el-button><el-button type="primary" @click="confirmOverwrite">确定</el-button></template>
+    </el-dialog>
+
+    <!-- 查看文件对话框 -->
+    <el-dialog v-model="viewDialogVisible" title="查看文件" width="80%" top="5vh">
+      <div class="editor-container">
+        <pre class="view-content">{{ viewContent }}</pre>
+      </div>
+      <template #footer>
+        <el-button @click="viewDialogVisible = false">关闭</el-button>
+      </template>
     </el-dialog>
 
     <el-dialog v-model="editDialogVisible" title="编辑文件" width="80%" top="5vh" @close="closeEditor">
@@ -258,6 +271,8 @@ const transfers = ref<any[]>([])
 const showHidden = ref(false)
 let messageHandler: ((event: MessageEvent) => void) | null = null
 const isNavigating = ref(false)
+const viewDialogVisible = ref(false);
+const viewContent = ref('');
 
 const currentPathParts = computed(() => {
   if (currentPath.value === null) return []
@@ -429,51 +444,57 @@ const confirmOverwrite = () => {
 }
 const cancelOverwrite = () => { if (resolveOverwrite) resolveOverwrite('cancel'); confirmOverwriteVisible.value = false }
 
-async function doUpload(file: File, remoteDir: string, remoteFileName: string): Promise<boolean> {
+async function doUpload(file: File, remoteDir: string, remoteFileName: string, silent = false): Promise<boolean> {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('sessionId', props.sessionId)
   formData.append('remotePath', remoteDir)
   formData.append('remoteFileName', remoteFileName)
   const transferId = Date.now() + Math.random()
-  transfers.value.push({ id: transferId, name: remoteFileName, progress: 0, status: 'uploading' })
+  if (!silent) {
+    transfers.value.push({ id: transferId, name: remoteFileName, progress: 0, status: 'uploading' })
+  }
   try {
     const response = await fetch('/api/sftp/upload', { method: 'POST', body: formData })
     const result = await response.json()
     if (result.success) {
-      const transfer = transfers.value.find(t => t.id === transferId)
-      if (transfer) { transfer.progress = 100; transfer.status = 'success' }
-      ElMessage.success(`上传成功: ${remoteFileName}`)
+      if (!silent) {
+        const transfer = transfers.value.find(t => t.id === transferId)
+        if (transfer) { transfer.progress = 100; transfer.status = 'success' }
+        ElMessage.success(`上传成功: ${remoteFileName}`)
+      }
       if (remoteDir === currentPath.value) refreshFileList()
       return true
     } else throw new Error(result.error)
   } catch (err) {
-    const transfer = transfers.value.find(t => t.id === transferId)
-    if (transfer) transfer.status = 'error'
-    ElMessage.error(`上传失败: ${remoteFileName} - ${err.message}`)
+    if (!silent) {
+      const transfer = transfers.value.find(t => t.id === transferId)
+      if (transfer) transfer.status = 'error'
+      ElMessage.error(`上传失败: ${remoteFileName} - ${err.message}`)
+    } else {
+      ElMessage.error(`保存失败: ${err.message}`)
+    }
     return false
   }
 }
 
-async function uploadFileToRemote(file: File, remoteDir: string, remoteFileName: string): Promise<boolean> {
+async function uploadFileToRemote(file: File, remoteDir: string, remoteFileName: string, skipConfirm = false, silent = false): Promise<boolean> {
   const fullRemotePath = remoteDir === '/' ? `/${remoteFileName}` : `${remoteDir}/${remoteFileName}`
   const exists = await checkFileExists(fullRemotePath)
   if (!exists) {
-    return doUpload(file, remoteDir, remoteFileName)
+    return doUpload(file, remoteDir, remoteFileName, silent)
   }
-  if (batchOverwriteAction.value) {
-    if (batchOverwriteAction.value === 'overwrite') {
-      return doUpload(file, remoteDir, remoteFileName)
-    } else {
-      ElMessage.info(`跳过已存在文件: ${remoteFileName}`)
-      return false
-    }
+  if (skipConfirm || batchOverwriteAction.value === 'overwrite') {
+    return doUpload(file, remoteDir, remoteFileName, silent)
+  }
+  if (batchOverwriteAction.value === 'skip') {
+    if (!silent) ElMessage.info(`跳过已存在文件: ${remoteFileName}`)
+    return false
   }
   const action = await showOverwriteConfirm(file, remoteDir, remoteFileName)
-  if (action === 'overwrite') return doUpload(file, remoteDir, remoteFileName)
+  if (action === 'overwrite') return doUpload(file, remoteDir, remoteFileName, silent)
   return false
 }
-
 async function ensureRemoteDirectory(dirPath: string): Promise<void> {
   if (dirPath === '/' || dirPath === '') return
   const parts = dirPath.split('/').filter(p => p)
@@ -613,6 +634,28 @@ const openEditor = async (file: any) => {
     editDialogVisible.value = true
   } catch (err) { ElMessage.error('读取文件失败: ' + err.message) }
 }
+
+// 查看文件（只读）
+const viewFile = async () => {
+  if (!contextMenuFile.value || contextMenuFile.value.type === 'directory') {
+    ElMessage.warning('不能查看文件夹');
+    return;
+  }
+  if (currentPath.value === null) return;
+  const filePath = currentPath.value === '/' ? `/${contextMenuFile.value.name}` : `${currentPath.value}/${contextMenuFile.value.name}`;
+  const downloadUrl = `/api/sftp/download?sessionId=${props.sessionId}&filePath=${encodeURIComponent(filePath)}`;
+  try {
+    const response = await fetch(downloadUrl);
+    if (!response.ok) throw new Error('读取失败');
+    const text = await response.text();
+    viewContent.value = text;
+    viewDialogVisible.value = true;
+  } catch (err) {
+    ElMessage.error('读取文件失败: ' + err.message);
+  }
+  contextMenuVisible.value = false;
+};
+
 const saveFileContent = async () => {
   if (currentPath.value === null) return
   const blob = new Blob([editContent.value], { type: 'text/plain;charset=utf-8' })
@@ -620,9 +663,12 @@ const saveFileContent = async () => {
   const file = new File([blob], fileName, { type: 'text/plain' })
   const dirPath = editingFilePath.value.split('/').slice(0, -1).join('/') || '/'
   batchOverwriteAction.value = null
-  await uploadFileToRemote(file, dirPath, fileName)
-  editDialogVisible.value = false
-  refreshFileList()
+  const success = await uploadFileToRemote(file, dirPath, fileName, true, true)
+  if (success) {
+    ElMessage.success('保存成功')
+    editDialogVisible.value = false
+    refreshFileList()
+  }
 }
 const closeEditor = () => { editContent.value = ''; editingFilePath.value = '' }
 
@@ -712,6 +758,26 @@ const clearTransfers = () => { transfers.value = [] }
 const showContextMenu = (event: MouseEvent, file: any) => { contextMenuFile.value = file; contextMenuVisible.value = true; contextMenuX.value = event.clientX; contextMenuY.value = event.clientY; event.preventDefault() }
 const editContextFile = () => { if (contextMenuFile.value) openEditor(contextMenuFile.value); contextMenuVisible.value = false }
 const closeContextMenu = () => { contextMenuVisible.value = false }
+// 复制文件名
+const copyFileName = () => {
+  if (contextMenuFile.value) {
+    navigator.clipboard.writeText(contextMenuFile.value.name)
+        .then(() => ElMessage.success('文件名已复制'))
+        .catch(() => ElMessage.error('复制失败'));
+  }
+  contextMenuVisible.value = false;
+};
+
+// 复制完整路径
+const copyFilePath = () => {
+  if (contextMenuFile.value && currentPath.value !== null) {
+    const fullPath = currentPath.value === '/' ? `/${contextMenuFile.value.name}` : `${currentPath.value}/${contextMenuFile.value.name}`;
+    navigator.clipboard.writeText(fullPath)
+        .then(() => ElMessage.success('路径已复制'))
+        .catch(() => ElMessage.error('复制失败'));
+  }
+  contextMenuVisible.value = false;
+};
 const chmodFile = () => {
   if (!contextMenuFile.value) return
   const perm = contextMenuFile.value.permissions
@@ -1108,6 +1174,7 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(0,0,0,0.1);
   z-index: 2000;
   min-width: 100px;
+  color: var(--el-text-color-primary);
 }
 .context-menu div {
   padding: 8px 12px;
@@ -1159,5 +1226,15 @@ onUnmounted(() => {
 }
 .el-button .el-icon {
   margin-right: 4px;
+}
+.view-content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: var(--el-bg-color);
+  padding: 12px;
+  border-radius: 4px;
+  max-height: 60vh;
+  overflow: auto;
+  font-family: monospace;
 }
 </style>
