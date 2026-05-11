@@ -9,6 +9,9 @@
       </div>
       <div class="toolbar-actions">
         <el-button size="default" :icon="FullScreen" @click="toggleFullscreen" title="全屏" />
+        <el-button size="default" :icon="CopyDocument" @click="openNewTab" title="基于当前配置打开新窗口">
+          多开窗口
+        </el-button>
         <el-button size="default" @click="reconnect" :disabled="connected || isConnecting" :icon="RefreshRight">
           重新连接
         </el-button>
@@ -44,7 +47,7 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
-import { Close, RefreshRight, FullScreen } from '@element-plus/icons-vue'
+import { Close, RefreshRight, FullScreen, CopyDocument  } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SFTPManager from './SFTPManager.vue'
 import { getConfig } from '../api/config'
@@ -55,7 +58,7 @@ const props = defineProps<{
   sessionId: string
 }>()
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'openNewTab'])
 
 const terminalRef = ref<HTMLElement>()
 let terminal: Terminal | null = null
@@ -71,6 +74,9 @@ let pendingStatsRequest = false
 const lastSftpPath = ref<string | null>(null)
 const handleSftpPathChange = (path: string) => {
   lastSftpPath.value = path
+}
+const openNewTab = () => {
+  emit('openNewTab', props.connection)
 }
 // 获取终端设置
 const fetchSettings = async () => {

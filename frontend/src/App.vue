@@ -39,6 +39,7 @@
                 :connection="tab.connection"
                 :session-id="tab.sessionId"
                 @close="closeTab(tab.id)"
+                @open-new-tab="handleOpenNewTab"
             />
             <RDPViewer
                 v-else-if="tab.type === 'rdp' && tab.connection"
@@ -154,6 +155,36 @@ const queryGroupSearch = (queryString: string, cb: Function) => {
 
 const handleGroupSelect = (item: any) => {
   formData.value.group = item.value
+}
+
+const handleOpenNewTab = (connection: any) => {
+  const baseName = connection.name
+  const existingNames = tabs.value.map(t => t.name)
+  let maxNum = 0
+
+  for (const name of existingNames) {
+    if (name === baseName) {
+      maxNum = Math.max(maxNum, 1)        // 原名称视为编号 1
+    } else if (name.startsWith(baseName + '-')) {
+      const suffix = name.substring(baseName.length + 1)
+      const num = parseInt(suffix, 10)
+      if (!isNaN(num)) {
+        maxNum = Math.max(maxNum, num)
+      }
+    }
+  }
+
+  const newName = maxNum === 0 ? baseName : `${baseName}-${maxNum + 1}`
+
+  const tabId = uuidv4()
+  tabs.value.push({
+    id: tabId,
+    name: newName,
+    type: connection.type,
+    connection: connection,
+    sessionId: uuidv4()
+  })
+  activeTab.value = tabId
 }
 
 const openNewConnectionDialog = () => {
